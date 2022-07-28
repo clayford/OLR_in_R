@@ -1,0 +1,43 @@
+---
+title: "Ordinal Logistic Regression in R"
+author: "Clay Ford, UVA Library"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+This is an R Markdown Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter* (Win/Linux) or *Cmd+Shift+Return* (Mac). 
+
+```{r}
+# trees is a data set that comes with R
+pairs(trees)
+```
+
+To hide the output, click the Expand/Collapse output button. To clear results (or an error), click the "x". 
+
+You can also press *Ctrl+Enter* (Win/Linux) or *Cmd+Return* (Mac) to run one line of code at a time (instead of the entire chunk).
+
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).  
+
+## CODE ALONG 0
+
+Try the `cumsum()` function with vector `1:5`
+
+```{r}
+cumsum(1:5)
+```
+
+## Load Packages
+
+We'll use the following packages in today's workshop.
+
+```{r}
+library(vcdExtra)
+library(MASS)
+library(car)
+library(effects)
+```
+
