@@ -24,7 +24,7 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 
 ## CODE ALONG 0
 
-Try the `cumsum()` function with vector `1:5`
+Try the `cumsum()` function with the vector `1:5`
 
 ```{r}
 cumsum(1:5)
@@ -35,9 +35,382 @@ cumsum(1:5)
 We'll use the following packages in today's workshop.
 
 ```{r}
-library(vcdExtra)
+library(vcd)
 library(MASS)
 library(car)
 library(effects)
 ```
 
+## Review: Probabilities and Cumulative Probabilities
+
+Let's say I randomly sample 100 UVA students and ask them to rate how spicy they like their food on a scale of 1 - 5, where 1 is no spice and 5 is maximum spiciness. Below are the (made up) responses entered manually using a named vector.
+
+```{r}
+resp <- c("none" = 17,
+          "mild" = 23,
+          "medium" = 31,
+          "hot" = 21,
+          "maximum" = 8)
+resp
+```
+
+I can calculate proportions from this data and use these as estimates of _probabilities_. Using the `proportions()` function on a vector of numbers returns the proportion of each value relative to the total of the vector.
+
+```{r}
+proportions(resp)
+```
+
+Based on this random sample I might estimate that a randomly selected UVA student has a probability of about 0.31 of liking medium spicy food. I'm using my observed proportion as an estimate of probability.
+
+Another way to summarize the results is with _cumulative probabilities_. For example, what's the the probability a randomly selected student can handle _medium heat or less_? Using the `cumsum()` we can calculate cumulative sums of proportions and answer this question. Below we take the proportions and "pipe" into the `cumsum()` function using the base R pipe operator. 
+
+```{r}
+proportions(resp) |> cumsum()
+```
+
+Based on this calculation I might estimate that a randomly selected student has a probability of about 0.71 of liking _medium or lower_ spiciness. We might state this mathematically as follows:
+
+$$P[X \le \text{medium}] = 0.71 $$
+
+In this case we're using the _ordering of the responses_ to make additional inferences about student spiciness preference. 
+
+What if we also collected additional information such as the sex of the respondents? Does being male or female affect the _cumulative probability_ of 0.71? Do we expect that to be higher for one sex?
+
+What about age or weight? Does being older and heavier affect the _cumulative probability_ of spiciness preference?
+
+_Ordinal Logistic Regression_ is a method that allows us to investigate questions such as this. It allows us to _model the cumulative probability_ of an ordered category given multiple predictors.
+
+Performing Ordinal Logistic Regression is like fitting any other statistical model. We have to...
+
+1. propose and fit a model
+2. assess if the model is good
+3. use the model to make predictions and/or quantify relationships
+
+## Load Data for the workshop
+
+Today we'll work with data from a double-blind clinical trial investigating a new treatment for rheumatoid arthritis (Koch & Edwards, 1988). The data is available in the vcd package (Meyer et al, 2022)
+
+```{r}
+data("Arthritis", package = "vcd")
+```
+
+If for some reason you can't install the vcd package, you can also download the data from GitHub:
+
+```{r}
+URL <- "https://github.com/clayford/OLR_in_R/raw/main/data/arthritis.rds"
+Arthritis <- readRDS(file = url(URL))
+```
+
+The goal today is to teach the basics of Ordinal Logistic Regression by developing a model to predict the _cumulative probability_ of pain improvement after treatment adjusting for age and sex. 
+
+### List of variables
+
+```{r}
+names(Arthritis)
+```
+
+- ID: patient ID
+- Treatment: factor indicating treatment (Placebo, Treated).
+- Sex: factor indicating sex (Female, Male).
+- Age: age of patient in years
+- Improved: _ordered factor_ indicating treatment outcome (None, Some, Marked).
+
+## Ordered Factors
+
+An ordered factor is a _categorical variable with ordered levels_. Examples of ordered categorical variables include:
+
+- Satisfaction/Recommendation ratings (Poor, Fair, Good, Excellent)
+- Pain scales (none, mild, moderate, severe)
+- Experience (none, some, proficient, expert)
+- Likert scale ratings (disagree, neutral, agree; OR never, sometimes, always)
+
+We can format a categorical variable as an ordered factor using the `factor()` function with the argument `ordered = TRUE`. _Note we are responsible for creating the order!_ Otherwise R will set the order alphabetically. 
+
+Quick example using fake data. Sample from a vector 50 times with replacement using the `sample()` function.
+
+```{r}
+experience <- sample(c("none", "some", "proficient", "expert"), 
+                     size = 50, replace = TRUE)
+head(experience)
+```
+
+Let's convert to factor. Notice there is no ordering of the levels. They are simply listed alphabetically.
+
+```{r}
+experience <- factor(experience)
+head(experience)
+```
+
+Now convert to _ordered factor_. Notice the levels are ordered but still in alphabetical order. The notation `expert < none < proficient < some` says "expert" is less than "none", which is less than "proficient", which is less than "some". According to this ordering "some" is the highest, which doesn't make sense.
+
+```{r}
+experience <- factor(experience, ordered = TRUE)
+head(experience)
+```
+
+Now let's set the appropriate ordering of the levels using the `levels` argument.
+
+```{r}
+experience <- factor(experience, ordered = TRUE, 
+                     levels = c("none", "some", "proficient", "expert"))
+head(experience)
+```
+
+This is an important data wrangling step when preparing for Ordinal Logistic Regression.
+
+## Explore the Arthritis data
+
+Our response is the Improved variable. Let's tabulate the counts using `xtabs()`. The notation `~ Improved` means "tabulate by Improved".
+
+```{r}
+xtabs(~ Improved, data = Arthritis)
+```
+
+How does Improved breakdown between the Treatments? The notation `~ Treatment + Improved` means "tabulate by Treatment and Improved, with Treatment in the rows and Improved in the columns."
+
+```{r}
+xtabs(~ Treatment + Improved, data = Arthritis)
+```
+
+Now stratify by Sex. We have some sparse cells in the Male table.
+
+```{r}
+xtabs(~ Treatment + Improved + Sex, data = Arthritis)
+
+```
+
+Finally let's look at how Age relates to Improved using a spine plot. It appears older subjects are somewhat more likely to see some improvement, at least for ages 35 - 60. 
+
+```{r}
+plot(Improved ~ Age, data = Arthritis)
+```
+
+## Ordinal Logistic Regression basics
+
+Ordinal logistic regression produces a _model_ that we can use to make cumulative probability predictions or quantify how predictors affect cumulative probabilities. 
+
+Let's fit a simple model for the Arthritis data. Below we model Improved as a function of Treatment. In other words, _how does Treatment affect the cumulative probability of Improved_?
+
+To fit this model we use the `polr()` function from the MASS package. polr stands for "proportional odds logistic regression". We'll explain proportional odds in a moment. As with `lm()` and `glm()`, we define our model using R's formula syntax. We also typically want to save the model result and inspect the results using `summary()`
+
+```{r}
+m1 <- polr(Improved ~ Treatment, data = Arthritis)
+summary(m1)
+```
+
+The message "Re-fitting to get Hessian" means the model was refit to get a matrix called the "Hessian" in order to compute standard errors. To suppress this message, use `Hess = TRUE` in the call to `polr()`.
+
+Notice we have _multiple intercepts_ which are listed separately from the coefficients. The separate intercepts are for _the levels below which we calculate cumulative probabilities_. Recall the levels of Improved:
+
+None < Some < Marked
+
+There are two cumulative probabilities we can calculate:
+
+1. None
+2. Some and lower
+
+(Marked and lower will always be 1.)
+
+So we basically have two models:
+
+1. log odds(None) = 0.7499 - 1.568*Treatment 
+2. log odds(Some or lower) = 1.5499 - 1.568*Treatment
+
+Where Treatment = 1 if treated, 0 if on Placebo.
+
+Notice _the coefficient is subtracted from the intercept_! That's the model that `polr()` fits. Also notice the _model is on the log odds, or logit, scale_. Recall that log odds transforms probability from [0,1] to (-Inf, + Inf). So the model predicts log odds values, which we then transform back to probability using the inverse logit.
+
+Now let's use our model and compute cumulative probabilities "by hand". Before we do that, it's good to know how to extract the intercepts and coefficients from the model object. The model object is a list. We use the `$` operator extract elements from it. The intercepts are in the `zeta` element and the coefficients are in the `coefficients` element. (Can also use `coef()` to extract coefficients.)
+
+```{r}
+m1$zeta
+```
+
+```{r}
+m1$coefficients
+```
+
+The log odds of None given a subject was on Placebo is simply the `None|Some` intercept: 0.7499107. To convert to probability, we can use the `plogis()` function.
+
+```{r}
+(p1 <- plogis(m1$zeta["None|Some"]))
+```
+
+The log odds of None given a subject was on Treatment is 0.7499107 - 1.567644. Again we convert to probability.
+
+```{r}
+(p2 <- plogis(m1$zeta["None|Some"] - m1$coefficients))
+```
+
+So we predict about 68% of subjects on Placebo will see no improvement versus only about 31% of subjects on Treatment. 
+
+We can do the same calculations for cumulative probability for Some improvement or lower: log odds(Some or lower) = 1.5499 - 1.568*Treatment
+
+The log odds of Some or lower given a subject was on Placebo is simply the `Some|Marked` intercept: 1.5498756. 
+
+```{r}
+(p3 <- plogis(m1$zeta["Some|Marked"]))
+```
+
+The log odds of Some or lower given a subject was on Treatment is 1.5498756 - 1.567644.
+
+```{r}
+(p4 <- plogis(m1$zeta["Some|Marked"] - m1$coefficients))
+```
+
+This implies about 1 - 0.50 = 50% of Treated subjects can expect Marked improvement versus 1 - 0.82 = 18% of subjects on Placebo.
+
+Let's compare the predicted cumulative probabilities to the observed cumulative proportions. We can get the observed cumulative proportions by creating a cross-tabulation, getting row-wise proportions, and applying `cumsum()` along the rows. (We need to use `t()` to transpose the result so Treatment is on the rows.)
+
+```{r}
+xtabs(~ Treatment + Improved, data = Arthritis) |>
+  proportions(margin = 1) |>
+  apply(1, cumsum) |> 
+  t()
+```
+
+Now compare to our model-based predicted cumulative probabilities.
+
+```{r}
+# model predictions
+matrix(c(p1, p2, p3, p4, 1, 1), nrow = 2, 
+       dimnames = list("Treatment" = c("Placebo", "Treated"),
+                       "Improved" = c("None", "Marked", "Some")))
+```
+
+Our model-based predictions are quite close to the observed proportions, but not identical. This is because of the _proportional odds assumption_.
+
+
+## Proportional Odds
+
+Recall: odds = p/(1 -p)
+
+Predicted probability of Improved = None on Treatment is 0.3062450. The odds are calculated as 0.3062450/(1 - 0.3062450)
+
+```{r}
+p2/(1 - p2)
+```
+
+Predicted probability of Improved = None on Placebo is 0.6791592. The odds are calculated as 0.6791592/(1 - 0.6791592)
+
+```{r}
+p1/(1 - p1)
+```
+
+The odds ratio for those two odds are
+
+```{r}
+(p2/(1 - p2))/
+(p1/(1 - p1))
+```
+
+If we take the log of that we get the model coefficient for Treatment with a change in sign. (We explain why that is shortly.)
+
+```{r}
+log((p2/(1 - p2))/
+(p1/(1 - p1)))
+```
+
+Now let's do the same calculation for the Some or lower cumulative probabilities:
+
+```{r}
+# p4 = P(Some or lower) if Treated
+# p3 = P(Some or lower) if Placebo
+log((p4/(1 - p4))/
+(p3/(1 - p3)))
+```
+
+Notice we get the same answer. In other words, the Treatment effect is proportional to the category level used to determine cumulative probability. That's the proportional odds assumption. _The coefficients are independent of the levels of the ordered response_. It doesn't matter whether we go from "None" to "Some", or "Some" to "Marked", the effect of Treatment is the same.
+
+Let's look at the coefficient from the model again.
+
+```{r}
+coef(m1)
+```
+
+This is identical to what we derived above, but with a change in sign. `polr()` multiplies the coefficients in the summary output by -1 so when you exponentiate and take the odds ratio, _higher levels of predictors correspond to the response falling in the higher end of the ordinal scale_.  
+
+```{r}
+exp(coef(m1))
+```
+
+Interpretation: the estimated odds that a Treated subject's response has higher improvement is about 4.8 times the odds that a Placebo subject's response has higher improvement
+
+## Summary output and confidence intervals
+
+Let's look again at the output summary:
+
+```{r}
+summary(m1)
+```
+
+The Standard Errors quantify the uncertainty in the estimated intercepts and coefficients. The t values are the ratios of values to standard errors. T values larger than 2 are good evidence that the coefficient is in the _right direction_.
+
+To understand the uncertainty of the magnitude of the coefficient, we can calculate 95% confidence intervals using `confint()`:
+
+```{r}
+exp(confint(m1))
+```
+
+The estimated odds that a Treated subject's response has higher improvement is at least 2 times the odds that a Placebo subject's response has higher improvement, perhaps as high as 11 times.
+
+## Using predict() with fitted models
+
+Earlier we made predictions "by hand" for teaching purposes with intercept and coefficient values. In practice we would likely use `predict()` to get fitted probabilities. Using the `newdata` argument we can specify what we want to make predictions for. The default is to predict the class, or level, for the given predictors. (`type = "class"`)
+
+The Placebo group is predicted to experience No improvement while the Treated groups is expected to experience Marked improvement.
+
+```{r}
+predict(m1, newdata = data.frame(Treatment = c("Placebo", "Treated")), 
+        type = "class")
+```
+
+Changing `type = "probs` returns expected probabilities for each class.
+
+```{r}
+predict(m1, newdata = data.frame(Treatment = c("Placebo", "Treated")), 
+        type = "probs")
+```
+
+Notice these are NOT cumulative probabilities. These are expected probabilities for each level. They sum to 1. We see that `type = "class"` setting is simply picking the category with the highest probability.
+
+If we wanted cumulative probabilities, we need to use `cumsum()`
+
+```{r}
+predict(m1, newdata = data.frame(Treatment = c("Placebo", "Treated")), 
+        type = "probs") |>
+  apply(1,cumsum) |> 
+  t()
+```
+
+## Visualizing the model
+
+```{r}
+library(effects)
+Effect(m1, focal.predictors = "Treatment") |> plot()
+```
+
+
+## CODE ALONG 1
+
+- Build an ordinal regression model with Treatment and Age. Call it `m2`. Include `Hess = TRUE` in `polr()`
+- Interpret the Treatment and Age coefficients
+
+```{r}
+m2 <- polr(Improved ~ Treatment + Age, data = Arthritis, Hess = TRUE)
+summary(m2)
+```
+
+```{r}
+exp(coef(m2))
+```
+
+Interpretation: The estimated odds that a subject has higher improvement increase about 4% for each 1 year increase in age, holding all other variables constant.
+
+
+
+## References
+
+- David Meyer, Achim Zeileis, and Kurt Hornik (2022). vcd: Visualizing Categorical Data. R package version 1.4-10.
+- G. Koch & S. Edwards (1988), Clinical efficiency trials with categorical data. In K. E. Peace (ed.), Biopharmaceutical Statistics for Drug Development, 403–451. Marcel Dekker, New York.
+- Venables, W. N. & Ripley, B. D. (2002) Modern Applied Statistics with S. Fourth Edition. Springer, New York. ISBN 0-387-95457-0
