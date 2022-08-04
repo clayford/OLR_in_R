@@ -43,14 +43,14 @@ library(effects)
 
 ## Review: Probabilities and Cumulative Probabilities
 
-Let's say I randomly sample 100 UVA students and ask them to rate how spicy they like their food on a scale of 1 - 5, where 1 is no spice and 5 is maximum spiciness. Below are the (made up) responses entered manually using a named vector.
+Let's say I randomly sample 100 UVA students and ask them to rate how spicy they like their food on a scale of 1 - 5, where 1 is no spice and 5 is maximum spiciness. Below are made up responses entered manually using a named vector.
 
 ```{r}
-resp <- c("none" = 17,
-          "mild" = 23,
-          "medium" = 31,
-          "hot" = 21,
-          "maximum" = 8)
+resp <- c("1 none" = 17,
+          "2 mild" = 23,
+          "3 medium" = 31,
+          "4 hot" = 21,
+          "5 maximum" = 8)
 resp
 ```
 
@@ -68,13 +68,13 @@ Another way to summarize the results is with _cumulative probabilities_. For exa
 proportions(resp) |> cumsum()
 ```
 
-Based on this calculation I might estimate that a randomly selected student has a probability of about 0.71 of liking _medium or lower_ spiciness. We might state this mathematically as follows:
+Based on this calculation I might estimate that a randomly selected student has a probability of about 0.71 of liking _medium or lower_ spiciness. We might state this mathematically as follows (using LaTeX):
 
 $$P[X \le \text{medium}] = 0.71 $$
 
 In this case we're using the _ordering of the responses_ to make additional inferences about student spiciness preference. 
 
-What if we also collected additional information such as the sex of the respondents? Does being male or female affect the _cumulative probability_ of 0.71? Do we expect that to be higher for one sex?
+What if we also collected additional information such as the sex of the respondents? Does being male or female affect the _cumulative probability_ of 0.71? For example, do we expect that to be higher for males?
 
 What about age or weight? Does being older and heavier affect the _cumulative probability_ of spiciness preference?
 
@@ -115,7 +115,7 @@ names(Arthritis)
 - Age: age of patient in years
 - Improved: _ordered factor_ indicating treatment outcome (None, Some, Marked).
 
-## Ordered Factors
+## Ordered Factors in R
 
 An ordered factor is a _categorical variable with ordered levels_. Examples of ordered categorical variables include:
 
@@ -126,7 +126,7 @@ An ordered factor is a _categorical variable with ordered levels_. Examples of o
 
 We can format a categorical variable as an ordered factor using the `factor()` function with the argument `ordered = TRUE`. _Note we are responsible for creating the order!_ Otherwise R will set the order alphabetically. 
 
-Quick example using fake data. Sample from a vector 50 times with replacement using the `sample()` function.
+Quick example using fake data. Sample from a vector 50 times with replacement using the `sample()` function. The result is a character vector.
 
 ```{r}
 experience <- sample(c("none", "some", "proficient", "expert"), 
@@ -141,14 +141,14 @@ experience <- factor(experience)
 head(experience)
 ```
 
-Now convert to _ordered factor_. Notice the levels are ordered but still in alphabetical order. The notation `expert < none < proficient < some` says "expert" is less than "none", which is less than "proficient", which is less than "some". According to this ordering "some" is the highest, which doesn't make sense.
+Now convert to _ordered factor_ using the argument `ordered = TRUE`. Notice the levels are ordered but still in alphabetical order. The notation `expert < none < proficient < some` says "expert" is less than "none", which is less than "proficient", which is less than "some". According to this ordering "some" is the highest, which doesn't make sense.
 
 ```{r}
 experience <- factor(experience, ordered = TRUE)
 head(experience)
 ```
 
-Now let's set the appropriate ordering of the levels using the `levels` argument.
+Now let's do it the right way: Convert to ordered factor with the ordering of the levels specified using the `levels` argument. 
 
 ```{r}
 experience <- factor(experience, ordered = TRUE, 
@@ -179,7 +179,7 @@ xtabs(~ Treatment + Improved + Sex, data = Arthritis)
 
 ```
 
-Finally let's look at how Age relates to Improved using a spine plot. It appears older subjects are somewhat more likely to see some improvement, at least for ages 35 - 60. 
+Finally let's look at how Age relates to Improved using a _spine plot_. It appears older subjects are somewhat more likely to see some improvement, at least for ages 35 - 60. 
 
 ```{r}
 plot(Improved ~ Age, data = Arthritis)
@@ -187,18 +187,18 @@ plot(Improved ~ Age, data = Arthritis)
 
 ## Ordinal Logistic Regression basics
 
-Ordinal logistic regression produces a _model_ that we can use to make cumulative probability predictions or quantify how predictors affect cumulative probabilities. 
+Ordinal logistic regression produces a _model_ that we can use to make cumulative probability predictions or quantify how predictors affect cumulative probabilities. Like binary logistic regression, the results are on the log odds scale.
 
 Let's fit a simple model for the Arthritis data. Below we model Improved as a function of Treatment. In other words, _how does Treatment affect the cumulative probability of Improved_?
 
-To fit this model we use the `polr()` function from the MASS package. polr stands for "proportional odds logistic regression". We'll explain proportional odds in a moment. As with `lm()` and `glm()`, we define our model using R's formula syntax. We also typically want to save the model result and inspect the results using `summary()`
+One way to do this is with the `polr()` function from the MASS package. "polr" stands for "proportional odds logistic regression". We'll explain proportional odds in a moment. As with `lm()` and `glm()`, we define our model using R's formula syntax. We also typically want to save the model result and inspect the results using `summary()`
 
 ```{r}
 m1 <- polr(Improved ~ Treatment, data = Arthritis)
 summary(m1)
 ```
 
-The message "Re-fitting to get Hessian" means the model was refit to get a matrix called the "Hessian" in order to compute standard errors. To suppress this message, use `Hess = TRUE` in the call to `polr()`.
+The message "Re-fitting to get Hessian" means the model was refit when we called `summary()` to get a matrix called the "Hessian" in order to compute standard errors. To suppress this message, use `Hess = TRUE` in the call to `polr()`.
 
 Notice we have _multiple intercepts_ which are listed separately from the coefficients. The separate intercepts are for _the levels below which we calculate cumulative probabilities_. Recall the levels of Improved:
 
@@ -220,7 +220,7 @@ Where Treatment = 1 if treated, 0 if on Placebo.
 
 Notice _the coefficient is subtracted from the intercept_! That's the model that `polr()` fits. Also notice the _model is on the log odds, or logit, scale_. Recall that log odds transforms probability from [0,1] to (-Inf, + Inf). So the model predicts log odds values, which we then transform back to probability using the inverse logit.
 
-Now let's use our model and compute cumulative probabilities "by hand". Before we do that, it's good to know how to extract the intercepts and coefficients from the model object. The model object is a list. We use the `$` operator extract elements from it. The intercepts are in the `zeta` element and the coefficients are in the `coefficients` element. (Can also use `coef()` to extract coefficients.)
+Now let's use our model and compute cumulative probabilities "by hand". Before we do that, it's good to know how to extract the intercepts and coefficients from the model object. The model object is a list. We use the `$` operator to extract elements from it. The intercepts are in the `zeta` element and the coefficients are in the `coefficients` element. (Can also use `coef()` to extract coefficients.)
 
 ```{r}
 m1$zeta
@@ -230,16 +230,16 @@ m1$zeta
 m1$coefficients
 ```
 
-The log odds of None given a subject was on Placebo is simply the `None|Some` intercept: 0.7499107. To convert to probability, we can use the `plogis()` function.
+The log odds of None given a subject was on Placebo is simply the `None|Some` intercept: 0.7499107. To convert to probability, we can use the `plogis()` function. Below we pipe the `None|Some` intercept into `plogis()`
 
 ```{r}
-(p1 <- plogis(m1$zeta["None|Some"]))
+(p1 <- m1$zeta["None|Some"] |> plogis())
 ```
 
 The log odds of None given a subject was on Treatment is 0.7499107 - 1.567644. Again we convert to probability.
 
 ```{r}
-(p2 <- plogis(m1$zeta["None|Some"] - m1$coefficients))
+(p2 <- (m1$zeta["None|Some"] - m1$coefficients) |> plogis())
 ```
 
 So we predict about 68% of subjects on Placebo will see no improvement versus only about 31% of subjects on Treatment. 
@@ -249,13 +249,13 @@ We can do the same calculations for cumulative probability for Some improvement 
 The log odds of Some or lower given a subject was on Placebo is simply the `Some|Marked` intercept: 1.5498756. 
 
 ```{r}
-(p3 <- plogis(m1$zeta["Some|Marked"]))
+(p3 <- m1$zeta["Some|Marked"] |> plogis())
 ```
 
 The log odds of Some or lower given a subject was on Treatment is 1.5498756 - 1.567644.
 
 ```{r}
-(p4 <- plogis(m1$zeta["Some|Marked"] - m1$coefficients))
+(p4 <- (m1$zeta["Some|Marked"] - m1$coefficients) |> plogis())
 ```
 
 This implies about 1 - 0.50 = 50% of Treated subjects can expect Marked improvement versus 1 - 0.82 = 18% of subjects on Placebo.
@@ -307,6 +307,7 @@ The odds ratio for those two odds are
 If we take the log of that we get the model coefficient for Treatment with a change in sign. (We explain why that is shortly.)
 
 ```{r}
+# compare to coef(m1)
 log((p2/(1 - p2))/
 (p1/(1 - p1)))
 ```
@@ -338,13 +339,15 @@ Interpretation: the estimated odds that a Treated subject's response has higher 
 
 ## Summary output and confidence intervals
 
-Let's look again at the output summary:
+Let's look again at the output summary of our model. First we'll refit the model with Hess = TRUE to suppress the "re-fitting" message.
 
 ```{r}
+m1 <- polr(formula = Improved ~ Treatment, data = Arthritis, 
+           Hess = TRUE)
 summary(m1)
 ```
 
-The Standard Errors quantify the uncertainty in the estimated intercepts and coefficients. The t values are the ratios of values to standard errors. T values larger than 2 are good evidence that the coefficient is in the _right direction_.
+The Standard Errors quantify the uncertainty in the estimated intercepts and coefficients. The t values are the ratios of values to standard errors. t values larger than 2 are good evidence that the sign on the coefficient is correct. In the output above, the t value of 3.53 for the coefficient is strong evidence that the effect of treatment is positive. 
 
 To understand the uncertainty of the magnitude of the coefficient, we can calculate 95% confidence intervals using `confint()`:
 
@@ -385,9 +388,94 @@ predict(m1, newdata = data.frame(Treatment = c("Placebo", "Treated")),
 
 ## Visualizing the model
 
+Between multiple intercepts, log odds, and cumulative probabilities, ordinal logistic regression output can be hard to interpret and communicate. Fortunately we have some methods for visualizing models. 
+
+The effects package provides some good out-of-the-box lattice plots for visualizing ordinal logistic regression models. Use the `Effect` plot to specify which coefficient(s) you want to plot. In our model we only have one choice: Treatment. Then pipe into the `plot()` function. This results in a plot for each outcome. We can see the probability of Marked improvement is much higher for the Treated group than the Placebo group. Likewise the probability of no improvment is much lower in the Treated group than in the Placebo group.
+
 ```{r}
-library(effects)
 Effect(m1, focal.predictors = "Treatment") |> plot()
+```
+
+We can combine the lines into one plot as follows:
+
+```{r}
+Effect(m1, focal.predictors = "Treatment") |> 
+  plot(lines=list(multiline=TRUE),
+       confint=list(style="bars"))
+
+```
+
+Another visualization option is the "stacked" plot, though there is no indication of uncertainty. This plot is probably better suited for a numeric predictor.
+
+```{r}
+Effect(m1, focal.predictors = "Treatment") |> 
+  plot(axes=list(y=list(style="stacked")))
+```
+
+If you want something created in ggplot2, the ggeffects package provides the `ggeffect()` function and associated plotting method. I think the `connect.lines = TRUE` argument is good to use.
+
+```{r}
+library(ggeffects)
+ggeffect(m1, terms = "Treatment") |> plot(connect.lines = TRUE)
+```
+
+## Model assessment
+
+A good model should generate data that looks similar to our observed data. We can use the `simulate()` function to rapidly simulate many new data sets using our model.
+
+```{r}
+sims <- simulate(m1, nsim = 250)
+```
+
+One quick assessment to simply find the mean proportion of None, Some and Marked for the simulated data sets.
+
+```{r}
+tab_df <- lapply(sims, function(x)proportions(xtabs(~x))) |>
+  do.call("rbind", args = _)
+colMeans(tab_df)
+```
+
+Compare to observed proportions. Not bad!
+
+```{r}
+xtabs(~ Improved, data = Arthritis) |>
+  proportions()
+```
+
+With a little more work we can plot the simulated proportions along with the observed proportions. First we need to save the observed proportions as a data frame.
+
+```{r}
+arth_p <- xtabs(~ Improved, data = Arthritis) |> 
+  proportions() |>
+  as.data.frame(responseName = "P")
+arth_p
+```
+
+Now we need to "apply" this procedure to every column of our "sims" data frame. To do that we create a function. You'll notice the body of the function is basically the same code above, except `~ Improved, data = Arthritis` is replaced with `~ x`.
+
+```{r}
+p_df <- function(x){
+  xtabs(~ x) |> 
+  proportions() |>
+  as.data.frame(responseName = "P")
+  }
+```
+
+Now we apply the function to the "sims" data frame using `lapply` and then convert the result to a data frame by using `do.call` to feed every list element to the `rbind()` function.
+
+```{r}
+sims_df <- lapply(sims, p_df) |> do.call(what = "rbind",args = _)
+```
+
+Now we're ready to create the plot. We can use multiple data frames in ggplot2 by calling the data frame directly in the `geom_` function. Again this looks good! Our simulated data is not systematically over-predicting or under-predicting.
+
+```{r}
+ggplot() +
+  geom_point(mapping = aes(x = Improved, y = P), 
+             data = arth_p, size = 3, color = "blue") +
+  geom_jitter(mapping = aes(x = x, y = P), 
+             data = sims_df, alpha = 0.25,
+             width = 0.1, height = 0)
 ```
 
 
@@ -406,7 +494,6 @@ exp(coef(m2))
 ```
 
 Interpretation: The estimated odds that a subject has higher improvement increase about 4% for each 1 year increase in age, holding all other variables constant.
-
 
 
 ## References
