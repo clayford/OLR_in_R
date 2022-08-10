@@ -103,8 +103,6 @@ URL <- "https://github.com/clayford/OLR_in_R/raw/main/data/arthritis.rds"
 Arthritis <- readRDS(file = url(URL))
 ```
 
-The goal today is to teach the basics of Ordinal Logistic Regression by developing a model to predict the _cumulative probability_ of pain improvement after treatment adjusting for age and sex. 
-
 ### List of variables
 
 ```{r}
@@ -116,6 +114,9 @@ names(Arthritis)
 - Sex: factor indicating sex (Female, Male).
 - Age: age of patient in years
 - Improved: _ordered factor_ indicating treatment outcome (None, Some, Marked).
+
+The goal today is to teach the basics of Ordinal Logistic Regression by developing a model to predict the _cumulative probability_ of pain improvement after treatment adjusting for age and sex. 
+
 
 ## Ordered Factors in R
 
@@ -162,22 +163,46 @@ This is an important data wrangling step when preparing for Ordinal Logistic Reg
 
 ## Explore the Arthritis data
 
-Our response is the Improved variable. Let's tabulate the counts using `xtabs()`. The notation `~ Improved` means "tabulate by Improved".
+Our response is the Improved variable. Notice it's already an ordered categorical variable:
+
+```{r}
+head(Arthritis$Improved)
+```
+
+Let's tabulate the counts using `xtabs()`. The notation `~ Improved` means "tabulate by Improved".
 
 ```{r}
 xtabs(~ Improved, data = Arthritis)
 ```
 
-How does Improved breakdown between the Treatments? The notation `~ Treatment + Improved` means "tabulate by Treatment and Improved, with Treatment in the rows and Improved in the columns."
+We an get cumulative proportions using `proportions()` and `cumsum()`. 
 
 ```{r}
-xtabs(~ Treatment + Improved, data = Arthritis)
+xtabs(~ Improved, data = Arthritis) |>
+  proportions() |>
+  cumsum()
 ```
 
-Now stratify by Sex. We have some sparse cells in the Male table.
+About 67% of subjects experienced None or Some improvement. Therefore about 33% of subjects experienced marked improvement. 
+
+How does cumulative probability of Improved breakdown between the Treatments? The notation `~ Treatment + Improved` means "tabulate by Treatment and Improved, with Treatment in the rows and Improved in the columns." The `margin = 1` argument in `proportions()` says calculate row-wise proportions. Then we "apply" the `cumsum()` function to the rows of the table. Finally we use `t()` to rotate or "transpose" the table.
 
 ```{r}
-xtabs(~ Treatment + Improved + Sex, data = Arthritis)
+xtabs(~ Treatment + Improved, data = Arthritis) |>
+  proportions(margin = 1) |>
+  apply(MARGIN = 1, cumsum) |> 
+  t()
+```
+
+About 84% of subjects experienced None or Some improvement in the Placebo group versus 49% in the Treatment group. That implies only 16% experienced Marked improvement in the Placebo group versus 51% in the Treatment group.
+
+Let's now stratify by Sex. We have some sparse cells in the Male table.
+
+```{r}
+xtabs(~ Treatment + Improved + Sex, data = Arthritis) |>
+  proportions(margin = c(1,3)) |> 
+  apply(MARGIN = c(1,3), cumsum) |>
+  apply(MARGIN = c(1,3), t)
 
 ```
 
@@ -262,16 +287,16 @@ The log odds of Some or lower given a subject was on Treatment is 1.5498756 - 1.
 
 This implies about 1 - 0.50 = 50% of Treated subjects can expect Marked improvement versus 1 - 0.82 = 18% of subjects on Placebo.
 
-Let's compare the predicted cumulative probabilities to the observed cumulative proportions. We can get the observed cumulative proportions by creating a cross-tabulation, getting row-wise proportions, and applying `cumsum()` along the rows. (We need to use `t()` to transpose the result so Treatment is on the rows.)
+Let's compare the predicted cumulative probabilities to the observed cumulative proportions. 
 
 ```{r}
 xtabs(~ Treatment + Improved, data = Arthritis) |>
   proportions(margin = 1) |>
-  apply(1, cumsum) |> 
+  apply(MARGIN = 1, cumsum) |> 
   t()
 ```
 
-Now compare to our model-based predicted cumulative probabilities.
+Now compare to our model-based predicted cumulative probabilities. I'm laying out the previously calculated probabilities as a matrix to match the layout of `xtabs()`. 
 
 ```{r}
 # model predictions
@@ -285,7 +310,7 @@ Our model-based predictions are quite close to the observed proportions, but not
 
 ## Proportional Odds
 
-Recall: odds = p/(1 -p)
+Recall: odds = p/(1 - p)
 
 Predicted probability of Improved = None on Treatment is 0.3062450. The odds are calculated as 0.3062450/(1 - 0.3062450)
 
@@ -323,7 +348,7 @@ log((p4/(1 - p4))/
 (p3/(1 - p3)))
 ```
 
-Notice we get the same answer. In other words, the Treatment effect is proportional to the ordered category level used to determine cumulative probability. That's the proportional odds assumption. _The coefficients are independent of the levels of the ordered response_. It doesn't matter whether we go from "None" to "Some", or "Some" to "Marked", the effect of Treatment is the same.
+Notice we get the _same answer_. The Treatment effect is proportional to the ordered category level used to determine cumulative probability. That's the proportional odds assumption. _The coefficients are independent of the levels of the ordered response_. It doesn't matter whether we go from "None" to "Some", or "Some" to "Marked", the effect of Treatment is the same.
 
 Let's look at the coefficient from the model again.
 
@@ -338,6 +363,27 @@ exp(coef(m1))
 ```
 
 Interpretation: the estimated odds that a Treated subject's response has higher improvement is about 4.8 times the odds that a Placebo subject's response has higher improvement
+
+Notice if we "remove" the minus sign we get the odds ratio we calculated above.
+
+```{r}
+exp(-coef(m1))  # -coef(m1) is equivalent to -1*coef(m1)
+```
+
+Compare to:
+
+```{r}
+(p2/(1 - p2))/
+(p1/(1 - p1))
+```
+
+And to:
+
+```{r}
+(p4/(1 - p4))/
+(p3/(1 - p3))
+```
+
 
 ## Summary output and confidence intervals
 
@@ -454,10 +500,10 @@ xtabs(~ Improved, data = Arthritis) |>
 With a little more work we can plot the simulated proportions along with the observed proportions. First we need to save the observed proportions as a data frame.
 
 ```{r}
-arth_p <- xtabs(~ Improved, data = Arthritis) |> 
+obs_p <- xtabs(~ Improved, data = Arthritis) |> 
   proportions() |>
   as.data.frame(responseName = "P")
-arth_p
+obs_p
 ```
 
 Now we need to "apply" this procedure to every column of our "sims" data frame. To do that we create a function. You'll notice the body of the function is basically the same code above, except `~ Improved, data = Arthritis` is replaced with `~ x`.
@@ -482,7 +528,7 @@ Now we're ready to create the plot. We can use multiple data frames in ggplot2 b
 ```{r}
 ggplot() +
   geom_point(mapping = aes(x = Improved, y = P), 
-             data = arth_p, size = 3, color = "blue") +
+             data = obs_p, size = 3, color = "blue") +
   geom_jitter(mapping = aes(x = x, y = P), 
              data = sims_df, alpha = 0.25,
              width = 0.1, height = 0)
