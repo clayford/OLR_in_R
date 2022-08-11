@@ -1,0 +1,43 @@
+- Fit an ordinal regression model with Treatment, Sex, and Age. Call it `m2`. Include `Hess = TRUE` in `polr()`
+
+m2 <- polr(Improved ~ Treatment + Sex + Age, 
+           data = Arthritis, Hess = TRUE)
+summary(m2)
+
+- Assess proportional odds assumption
+poTest(m2)
+rms::plot.xmean.ordinaly(Improved ~ Treatment + Sex + Age, data = Arthritis)
+
+- Interpret the coefficients
+exp(confint(m2))
+
+Interpretation: 
+
+- The estimated odds that a Treated subject's response has higher improvement is at least 2.3 times the odds that a Placebo subject's response has higher improvement, perhaps as high as 15 times, holding all other variables constant.
+- The estimated odds that a Male subject's response has higher improvement is at least 20% lower (1 - 0.80) than the odds that a Female subject's response has higher improvement, perhaps as much as 91% lower, holding all other variables constant.
+- The estimated odds that a subject has higher improvement increases by at least 0.3% for each 1 year increase in age, perhaps as much as 7%, holding all other variables constant.
+
+- Visualize the model with effect displays.
+
+ggeffect(m2, terms = "Age") |> plot()
+ggeffect(m2, terms = "Treatment") |> plot(connect.lines = TRUE)
+ggeffect(m2, terms = "Sex") |> plot(connect.lines = TRUE)
+
+
+- Is the model with three predictors an improvement over the model with 1 predictor?
+
+anova(m1, m2)
+
+- assessment model via simulation
+
+sims2 <- simulate(m2, nsim = 250)
+sims_df2 <- lapply(sims2, p_df) |> 
+  do.call(what = "rbind",args = _)
+ggplot() +
+  geom_point(mapping = aes(x = Improved, y = P), 
+             data = obs_p, size = 3, color = "blue") +
+  geom_jitter(mapping = aes(x = x, y = P), 
+             data = sims_df2, alpha = 0.25,
+             width = 0.1, height = 0)
+```
+
