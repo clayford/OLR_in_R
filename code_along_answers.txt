@@ -1,3 +1,18 @@
+## CODE ALONG 1
+
+- Investigate the Age variable
+- Investigate the Sex variable
+
+
+summary(Arthritis$Age)
+hist(Arthritis$Age)
+stripchart(Age ~ Improved, data = Arthritis)
+
+xtabs(~ Sex, data = Arthritis)
+
+
+## CODE ALONG 2
+
 - Fit an ordinal regression model with Treatment, Sex, and Age. Call it `m2`. Include `Hess = TRUE` in `polr()`
 
 m2 <- polr(Improved ~ Treatment + Sex + Age, 

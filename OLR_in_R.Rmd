@@ -128,7 +128,7 @@ An ordered factor is a _categorical variable with ordered levels_. Examples of o
 
 We can format a categorical variable as an ordered factor using the `factor()` function with the argument `ordered = TRUE`. _We are responsible for creating the order!_ Otherwise R will set the order alphabetically. 
 
-Quick example using fake data. Sample from a vector 50 times with replacement using the `sample()` function. The result is a character vector.
+Quick example using fake data. Sample from a vector of ordered levels 50 times with replacement using the `sample()` function. The result is a character vector.
 
 ```{r}
 experience <- sample(c("none", "some", "proficient", "expert"), 
@@ -200,16 +200,7 @@ About 84% of subjects experienced None or Some improvement in the Placebo group 
 - Investigate the Age variable
 - Investigate the Sex variable
 
-
-```{r}
-summary(Arthritis$Age)
-hist(Arthritis$Age)
-stripchart(Age ~ Improved, data = Arthritis)
-```
-
-```{r}
-xtabs(~ Sex, data = Arthritis)
-```
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).  
 
 
 ## Ordinal Logistic Regression basics
@@ -238,7 +229,7 @@ There are two cumulative probabilities we can calculate:
 
 (Marked and lower will always be 1.)
 
-So we have two models:
+So we have two models depending on the cumulative probability we want to model:
 
 1. log odds(None) = 0.7499 - 1.568*Treatment 
 2. log odds(Some or lower) = 1.5499 - 1.568*Treatment
@@ -295,7 +286,7 @@ log odds(Some or lower) = 1.5498756 - 1.567644.
 (p4 <- (m1$zeta["Some|Marked"] - m1$coefficients) |> plogis())
 ```
 
-This implies about 1 - 0.50 = 50% of Treated subjects can expect Marked improvement versus 1 - 0.82 = 18% of subjects on Placebo.
+This implies about 1 - 0.50 = 50% of Treated subjects can expect Marked improvement versus only 1 - 0.82 = 18% of subjects on Placebo.
 
 Let's compare the predicted cumulative probabilities to the observed cumulative proportions. 
 
@@ -395,6 +386,41 @@ And to:
 (p3/(1 - p3))
 ```
 
+The substance of the result remains the same, but the interpretation is reversed: The estimated odds that a Treated subject's response has lower improvement is about 80% less than the odds that a Placebo subject's response has lower improvement
+
+## Assessing the proportional odds assumption
+
+Earlier we mentioned that proportional odds logistic regression assumes _the coefficients are independent of the category levels_. This means we assume the estimated odds ratio of Treatment, 4.795, is the same whether we're talking about comparing None versus Some or higher, or None or Some versus Marked on the Improvement scale.
+
+One way to assess if this assumption is satisfied is the `poTest()` function in the car package. Simply call it on the fitted model. _The null is the proportional odds assumption is true_. Rejecting the null is evidence against the assumption. The `poTest()` function provides an overall test of the PO assumption as well as separate tests for each predictor. We only have one predictor so both tests are the same. The result below implies we're safe in our assumption of proportional odds.
+
+```{r}
+poTest(m1)
+```
+
+The authors of the car package state, "It's our experience that the proportional-odds assumption is rarely supported by a hypothesis test. The proportional-odds model can nevertheless provide useful simplification of the data as long as fitted probabilities under the model aren't substantially distorted." (Fox and Weisberg, 2019, p. 322)
+
+Our simulation above showed the fitted probabilities were not "substantially distorted".
+
+A graphical method for assessing the proportional odds assumption is available in the rms package. The function `plot.xmean.ordinaly` plots both...
+
+- means of predictor by ordered category level (solid line)
+- expected value of predictor given category level assuming PO assumption is true (dashed line)
+
+When the solid and dashed lines roughly follow the same trajectory, we have good evidence that the PO assumption is safe. This looks great!
+
+```{r}
+# rms:: allows us to use the function without loading the rms package
+rms::plot.xmean.ordinaly(Improved ~ Treatment, data = Arthritis)
+```
+
+According to Frank Harrell, Violation of Proportional Odds is Not Fatal. See https://www.fharrell.com/post/po/
+
+If you think proportional odds assumption is badly violated, two options to consider: 
+
+- The _partial proportional odds model_, which allows some predictors to have multiple coefficients that vary with the response level. This can be fit using the `vglm()` function in the VGAM package. 
+- The _multinomial logit model_ that assumes no ordering of categories and fits a different coefficient for each response level. This can be fit using the `multinom()` function in the nnet package. 
+
 
 ## Summary output and confidence intervals
 
@@ -410,7 +436,7 @@ summary(m1)
 - The t values are the ratios of values to standard errors. t values larger than 2 or 3 are good evidence that the sign on the coefficient is correct. In the output above, the t value of 3.53 for the coefficient is strong evidence that the effect of treatment is positive. 
 - Residual Deviance and AIC are model fit statistics used when comparing models. Lower values are better. 
 
-To understand the _uncertainty of the magnitude of the coefficient_, we can calculate 95% confidence intervals using `confint()`. Notice use `exp()` to the odds ratio.
+To understand the _uncertainty of the magnitude of the coefficient_, we can calculate 95% confidence intervals using `confint()`. Notice use `exp()` to get the odds ratio.
 
 ```{r}
 exp(confint(m1))
@@ -429,7 +455,7 @@ predict(m1, newdata = data.frame(Treatment = c("Placebo", "Treated")),
         type = "class")
 ```
 
-Changing `type = "probs` returns expected probabilities for each class.
+Changing `type = "probs` returns expected probabilities for _each class_.
 
 ```{r}
 predict(m1, newdata = data.frame(Treatment = c("Placebo", "Treated")), 
@@ -501,7 +527,7 @@ sims[1:5,1:5]
 ```
 
 
-One quick assessment is to find the mean proportion of None, Some and Marked for the simulated data sets. Below we "apply" the function `proportions(xtabs(~x))` to each column of the "sims" data frame using `lapply()`. The result is a list object. We can combine the list elements into a matrix using `rbind()`. The `do.call()` function allows us to pass all those list elements to `rbind()`. Finally we take the mean of the three columns (None, Some and Marked) using `colMeans()`.
+One quick assessment is to find the mean proportion of None, Some and Marked for the simulated data sets. Below we "apply" the function `proportions(xtabs(~x))` to each column of the "sims" data frame using `lapply()`. The result is a list object. We can combine the list elements into a matrix using `rbind()`. The `do.call()` function allows us to pass all those list elements to `rbind()`. The underscore placeholder, `_`, indicates we want to pass the result result of `lapply` to the `args` argument. Finally we take the mean of the three columns (None, Some and Marked) using `colMeans()`.
 
 ```{r}
 tab_df <- lapply(sims, function(x)proportions(xtabs(~x))) |>
@@ -516,7 +542,7 @@ xtabs(~ Improved, data = Arthritis) |>
   proportions()
 ```
 
-With a little more work we can plot the simulated proportions along with the observed proportions. First we need to save the observed proportions as a data frame.
+With a little more work we can plot the simulated proportions along with the observed proportions. First we need to save the observed proportions as a data frame. We can do that piping the proportions into the `as.data.frame()` function. The argument `responseName = "P"` changes the column from the default "Freq" to "P" (for Proportion).
 
 ```{r}
 obs_p <- xtabs(~ Improved, data = Arthritis) |> 
@@ -525,7 +551,7 @@ obs_p <- xtabs(~ Improved, data = Arthritis) |>
 obs_p
 ```
 
-Now we need to "apply" this procedure to every column of our "sims" data frame. To do that we create a function. You'll notice the body of the function is basically the same code above, except `~ Improved, data = Arthritis` is replaced with `~ x`.
+Now we need to do the same thing to every column of our "sims" data frame. To do that we create a function. You'll notice the body of the function is basically the same code above, except `~ Improved, data = Arthritis` is replaced with `~ x`.
 
 ```{r}
 p_df <- function(x){
@@ -546,45 +572,15 @@ Now we're ready to create the plot. We can use multiple data frames in ggplot2 b
 
 ```{r}
 ggplot() +
+  # observed data - blue dots
   geom_point(mapping = aes(x = Improved, y = P), 
              data = obs_p, size = 3, color = "blue") +
+  # simulated data - gray dots
   geom_jitter(mapping = aes(x = x, y = P), 
              data = sims_df, alpha = 0.25,
              width = 0.1, height = 0)
 ```
 
-## Assessing the proportional odds assumption
-
-Earlier we mentioned that proportional odds logistic regression assumes _the coefficients are independent of the category levels_. This means we assume the estimated odds ratio of Treatment, 4.795, is the same whether we're talking about comparing None versus Some or higher, or None or Some versus Marked on the Improvement scale.
-
-One way to assess if this assumption is satisfied is the `poTest()` function in the car package. Simply call it on the fitted model. The null is the proportional odds assumption is true. Rejecting the null is evidence against the assumption. The `poTest()` function provides an overall test of the PO assumption as well as separate tests for each predictor. We only have one predictor so both tests are the same. The result below implies we're safe in our assumption of proportional odds.
-
-```{r}
-poTest(m1)
-```
-
-The authors of the car package state, "It's our experience that the proportional-odds assumption is rarely supported by a hypothesis test. The proportional-odds model can nevertheless provide useful simplification of the data as long as fitted probabilities under the model aren't substantially distorted." (Fox and Weisberg, 2019, p. 322)
-
-Our simulation above showed the fitted probabilities were not "substantially distorted".
-
-A graphical method for assessing the proportional odds assumption is available in the rms package. The function `plot.xmean.ordinaly` plots both...
-
-- means of predictor by ordered category level (solid line)
-- expected value of predictor given category level assuming PO assumption is true (dashed line)
-
-When the solid and dashed lines roughly follow the same trajectory, we have good evidence that the PO assumption is safe. This looks great!
-
-```{r}
-# rms:: allows us to use the function without loading the rms package
-rms::plot.xmean.ordinaly(Improved ~ Treatment, data = Arthritis)
-```
-
-According to Frank Harrell, Violation of Proportional Odds is Not Fatal. See https://www.fharrell.com/post/po/
-
-If you think proportional odds assumption is badly violated, two options to consider: 
-
-- The _partial proportional odds model_, which allows some predictors to have multiple coefficients that vary with the response level. This can be fit using the `vglm()` function in the VGAM package. 
-- The _multinomial logit model_ that assumes no ordering of categories and fits a different coefficient for each response level. This can be fit using the `multinom()` function in the nnet package. 
 
 ## CODE ALONG 2
 
@@ -594,7 +590,7 @@ Now that we've laid out the basics of fitting, assessing and using an Ordinal Lo
 - Assess proportional odds assumption
 - Interpret the coefficients
 - Visualize the model
-- Is the model "better" than `m1`?
+- Is the model "better" than `m1`? Use `anova(m1, m2)` to test.
 - Assess model via simulation
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).  
