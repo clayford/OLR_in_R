@@ -45,14 +45,20 @@ anova(m1, m2)
 
 - assessment model via simulation
 
-sims2 <- simulate(m2, nsim = 250)
-sims_df2 <- lapply(sims2, p_df) |> 
+sims2 <- simulate(m2, nsim = 200)
+p_df <- function(x){
+  xtabs(~ x) |> 
+  proportions() |>
+  as.data.frame(responseName = "P")
+  }
+sims_pdf2 <- lapply(sims2, p_df) |> 
   do.call(what = "rbind",args = _)
 ggplot() +
-  geom_point(mapping = aes(x = Improved, y = P), 
-             data = obs_p, size = 3, color = "blue") +
   geom_jitter(mapping = aes(x = x, y = P), 
-             data = sims_df2, alpha = 0.25,
-             width = 0.1, height = 0)
+             data = sims_pdf2, alpha = 0.25,
+             width = 0.1, height = 0) +
+  geom_point(mapping = aes(x = Improved, y = P), 
+             data = obs_pdf, size = 4, color = "blue") 
+
 ```
 

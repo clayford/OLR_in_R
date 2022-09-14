@@ -436,7 +436,20 @@ summary(m1)
 - The t values are the ratios of values to standard errors. t values larger than 2 or 3 are good evidence that the sign on the coefficient is correct. In the output above, the t value of 3.53 for the coefficient is strong evidence that the effect of treatment is positive. 
 - Residual Deviance and AIC are model fit statistics used when comparing models. Lower values are better. 
 
-To understand the _uncertainty of the magnitude of the coefficient_, we can calculate 95% confidence intervals using `confint()`. Notice use `exp()` to get the odds ratio.
+The authors of the `polr()` function elected to not output p-values. P-values do not measure the magnitude of an effect. They simply provide evidence if the sign of a coefficient is reliably positive or negative. A confidence interval on the coefficient is more informative, which we demonstrate next. However if you absolutely need a p-value, you can calculate using the `pt()` function. 
+
+1. Set `q` to t value
+2. Set `df` to number of observations minus number of coefficients estimated
+3. Set `lower.tail = F` to get the upper tail (ie, > t)
+4. multiply by 2 to get a two-sided test
+
+```{r}
+pt(q = 3.53, df = 84 - 3, lower.tail = FALSE) * 2
+```
+
+The `coeftest()` function in the lmtest package will also return p-values.
+
+To understand the _uncertainty of the magnitude of the coefficient_, we can calculate 95% confidence intervals using `confint()`. Notice use `exp()` to get the odds ratio. Also notice that only a CI for the predictor is calculated, not the intercepts.
 
 ```{r}
 exp(confint(m1))
@@ -526,32 +539,15 @@ Here's a glimpse of the first 5 simulations:
 sims[1:5,1:5]
 ```
 
-
-One quick assessment is to find the mean proportion of None, Some and Marked for the simulated data sets. Below we "apply" the function `proportions(xtabs(~x))` to each column of the "sims" data frame using `lapply()`. The result is a list object. We can combine the list elements into a matrix using `rbind()`. The `do.call()` function allows us to pass all those list elements to `rbind()`. The underscore placeholder, `_`, indicates we want to pass the result result of `lapply` to the `args` argument. Finally we take the mean of the three columns (None, Some and Marked) using `colMeans()`.
-
-```{r}
-tab_df <- lapply(sims, function(x)proportions(xtabs(~x))) |>
-  do.call("rbind", args = _)
-colMeans(tab_df)
-```
-
-Compare to observed proportions. Not bad!
+Let's calculate the proportion of each response within each simulation using `xtabs()` and `proportions()`. The last function, `as.data.frame()` converts the table to a data frame and names the column containing the proportions "P" (the default is "Freq").
 
 ```{r}
-xtabs(~ Improved, data = Arthritis) |>
-  proportions()
-```
-
-With a little more work we can plot the simulated proportions along with the observed proportions. First we need to save the observed proportions as a data frame. We can do that piping the proportions into the `as.data.frame()` function. The argument `responseName = "P"` changes the column from the default "Freq" to "P" (for Proportion).
-
-```{r}
-obs_p <- xtabs(~ Improved, data = Arthritis) |> 
+xtabs(~ sims$sim_1) |>
   proportions() |>
   as.data.frame(responseName = "P")
-obs_p
 ```
 
-Now we need to do the same thing to every column of our "sims" data frame. To do that we create a function. You'll notice the body of the function is basically the same code above, except `~ Improved, data = Arthritis` is replaced with `~ x`.
+To calculate proportions for _all columns_, we can convert the last chunk of code into a function and apply it to each column. Let's name it `p_df`. Notice it's the same code above with `x` in place of `sims$sim_1`.
 
 ```{r}
 p_df <- function(x){
@@ -561,25 +557,68 @@ p_df <- function(x){
   }
 ```
 
-Now we apply the function to the "sims" data frame using `lapply` and then convert the result to a data frame by using `do.call` to feed every list element to the `rbind()` function.
+Let's test it.
 
 ```{r}
-sims_df <- lapply(sims, p_df) |> 
-  do.call(what = "rbind",args = _)
+p_df(sims$sim_1)
 ```
 
-Now we're ready to create the plot. We can use multiple data frames in ggplot2 by calling the data frame directly in the `geom_` function. Our simulated data is not systematically over-predicting or under-predicting, but there is a good deal of variability in the predicted probabilities.
+Now let's apply the function to every column of the sims data frame using `lapply` and save as `sims_p`. . The "L" in `lapply` means the result will be a list. 
+
+```{r}
+sims_p <- lapply(sims, p_df)
+```
+
+The result is a list with 200 data frames. Let's look at the first two using the `$` operator to extract the data frame
+
+```{r}
+sims_p$sim_1
+```
+
+```{r}
+sims_p$sim_2
+```
+
+We can _combine all the data frames_ into one data frame using `rbind()`. The arguments to `rbind` are the data frames we want to combine. Instead of typing out all 200 data frames, we can use the `do.call()` function to "feed" all the data frames to the `rbind` function as follows. Notice I assign to an object called `sims_pdf`. 
+
+```{r}
+sims_pdf <- do.call(rbind, sims_p)
+```
+
+Now we have a data frame that we can use to create a plot using ggplot2.
 
 ```{r}
 ggplot() +
-  # observed data - blue dots
-  geom_point(mapping = aes(x = Improved, y = P), 
-             data = obs_p, size = 3, color = "blue") +
-  # simulated data - gray dots
   geom_jitter(mapping = aes(x = x, y = P), 
-             data = sims_df, alpha = 0.25,
+             data = sims_pdf, alpha = 0.25,
              width = 0.1, height = 0)
 ```
+
+_How does this compare to the original data_? Let's add that to the plot. We need to create a data frame of the observed proportions. We can do that using the same code from above and name the result `obs_pdf`:
+
+
+```{r}
+obs_pdf <- xtabs(~ Improved, data = Arthritis) |> 
+  proportions() |>
+  as.data.frame(responseName = "P")
+obs_pdf
+```
+
+Now update the plot to include the original data as big blue dots.
+
+```{r}
+ggplot() +
+  # simulated data - gray dots
+  geom_jitter(mapping = aes(x = x, y = P), 
+             data = sims_pdf, alpha = 0.25,
+             width = 0.1, height = 0) +
+  # observed data - blue dots
+  geom_point(mapping = aes(x = Improved, y = P), 
+             data = obs_pdf, size = 4, color = "blue") 
+
+```
+
+The model doesn't seem biased in any way. It doesn't consistently over or under predict. We want the model-simulated data to hover around the observed data. However there is a good deal of variability. For example the model simulates "None" from 0.4 to 0.6. Then again this model is only using one binary predictor: Treatment. 
 
 
 ## CODE ALONG 2
@@ -594,6 +633,8 @@ Now that we've laid out the basics of fitting, assessing and using an Ordinal Lo
 - Assess model via simulation
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).  
+
+
 
 
 ## We're done!
