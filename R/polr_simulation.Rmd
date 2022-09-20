@@ -1,0 +1,114 @@
+---
+title: "polr simulation"
+author: "Clay Ford"
+date: "2022-09-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(MASS)
+data("Arthritis", package = "vcd")
+m1 <- polr(Improved ~ Treatment, data = Arthritis)
+```
+
+
+## Model assessment via simulation
+
+A good model should generate data that looks similar to our observed data. We can use the `simulate()` function to rapidly simulate many new sets of our response variable. Below we use our model to generate 200 new sets of the Improved variable. The result is a data frame with 200 columns, where each column is a simulated outcome from our model. The number of rows equals the sample size of our original data frame: 84. We're taking our 84 observed predictors and using our model to simulate the outcome, Improved.
+
+```{r}
+sims <- simulate(m1, nsim = 200)
+dim(sims)
+```
+
+Here's a glimpse of the first 5 simulations:
+
+```{r}
+sims[1:5,1:5]
+```
+
+Let's calculate the proportion of each response within each simulation using `xtabs()` and `proportions()`. The last function, `as.data.frame()` converts the table to a data frame and names the column containing the proportions "P" (the default is "Freq").
+
+```{r}
+xtabs(~ sims$sim_1) |>
+  proportions() |>
+  as.data.frame(responseName = "P")
+```
+
+To calculate proportions for _all columns_, we can convert the last chunk of code into a function and apply it to each column. Let's name it `p_df`. Notice it's the same code above with `x` in place of `sims$sim_1`.
+
+```{r}
+p_df <- function(x){
+  xtabs(~ x) |> 
+  proportions() |>
+  as.data.frame(responseName = "P")
+  }
+```
+
+Let's test it.
+
+```{r}
+p_df(sims$sim_1)
+```
+
+Now let's apply the function to every column of the sims data frame using `lapply` and save as `sims_p`. . The "L" in `lapply` means the result will be a list. 
+
+```{r}
+sims_p <- lapply(sims, p_df)
+```
+
+The result is a list with 200 data frames. Let's look at the first two using the `$` operator to extract the data frame
+
+```{r}
+sims_p$sim_1
+```
+
+```{r}
+sims_p$sim_2
+```
+
+We can _combine all the data frames_ into one data frame using `rbind()`. The arguments to `rbind` are the data frames we want to combine. Instead of typing out all 200 data frames, we can use the `do.call()` function to "feed" all the data frames to the `rbind` function as follows. Notice I assign to an object called `sims_pdf`. 
+
+```{r}
+sims_pdf <- do.call(rbind, sims_p)
+```
+
+Now we have a data frame that we can use to create a plot using ggplot2.
+
+```{r}
+ggplot() +
+  geom_jitter(mapping = aes(x = x, y = P), 
+             data = sims_pdf, alpha = 0.25,
+             width = 0.1, height = 0)
+```
+
+_How does this compare to the original data_? Let's add that to the plot. We need to create a data frame of the observed proportions. We can do that using the same code from above and name the result `obs_pdf`:
+
+
+```{r}
+obs_pdf <- xtabs(~ Improved, data = Arthritis) |> 
+  proportions() |>
+  as.data.frame(responseName = "P")
+obs_pdf
+```
+
+Now update the plot to include the original data as big blue dots.
+
+```{r}
+ggplot() +
+  # simulated data - gray dots
+  geom_jitter(mapping = aes(x = x, y = P), 
+             data = sims_pdf, alpha = 0.25,
+             width = 0.1, height = 0) +
+  # observed data - blue dots
+  geom_point(mapping = aes(x = Improved, y = P), 
+             data = obs_pdf, size = 4, color = "blue") 
+
+```
+
+The model doesn't seem biased in any way. It doesn't consistently over or under predict. We want the model-simulated data to hover around the observed data. However there is a good deal of variability. For example the model simulates "None" from 0.4 to 0.6. Then again this model is only using one binary predictor: Treatment. 
