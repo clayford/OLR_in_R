@@ -678,6 +678,73 @@ ggplot() +
 
 The model doesn't seem biased in any way. It doesn't consistently over or under predict. We want the model-simulated data to hover around the observed data. However there is a good deal of variability. For example the model simulates "None" from 0.4 to 0.6. Then again this model is only using one binary predictor: Treatment. 
 
+## Simulating data for ordinal logistic regression
+
+It can be useful to know how to simulate data that will be analyzed via ordinal logistic regression. In addition it can help solidify our understanding of how ordinal logistic regression works.
+
+Let's say we want to simulate data (n = 300) for a pain scale with levels "none", "mild", "moderate", and "severe". Our predictor will be a binary treatment that reduces pain. Let's assume our treatment will reduce the odds of pain by about 80% compared to those who are not on treatment. This implies a log odds coefficient of about -1.6. The intercepts are set to -1.75, -0.5, and 1.25, which correspond to probabilities of about 0.15 (none), 0.38 (mild and below), and 0.78 (moderate and below) for subjects not on the treatment.
+
+```{r}
+plogis(c(-1.75, -0.5, 1.25))
+```
+
+So our models are as follows:
+
+1. prob(none) = -1.75 - -1.6*trt
+2. prob(mild and below) = -0.5 - -1.6*trt
+3. prob(moderate and below) = 1.25 - -1.6*trt
+
+Recall the formulas are on the log-odds scale. We can use `plogis()` to convert to probabilities.
+
+```{r}
+trt <- sample(0:1, size = 300, replace = TRUE)
+none <- plogis(-1.75 - -1.6*trt)
+mild <- plogis(-0.5 - -1.6*trt)
+moderate <- plogis(1.25 - -1.6*trt)
+head(cbind(trt, none, mild, moderate))
+```
+
+Above we have cumulative probabilities. To simulate data we need the probabilities for each level. First we add a column for the cumulative probability of severe pain, the highest level. Since it's the highest level, we set it to 1.
+
+```{r}
+probs <- cbind(none, mild, moderate, severe = 1)
+```
+
+Next we take the differences between the cumulative probabilities to get probabilities for each level. The `diff()` function is useful for this. Recall the "none" column is already specific to the "none" level since it's the lowest level. The `t()` function below transposes the result of the `apply()` function so we have 300 rows instead of 3.
+
+```{r}
+probs2 <- cbind(none, t(apply(probs, MARGIN = 1, diff)))
+head(probs2)
+```
+
+If we like we can confirm all rows sum to 1.
+
+```{r}
+all(apply(probs2, 1, sum) == 1)
+```
+
+Now we can use those probabilities to sample from a vector of pain values to create our response variable, which we'll name "y". We use the `apply()` function to apply the sample function to each row using the probabilities in that row.
+
+```{r}
+pain <- c("none", "mild", "moderate", "severe")
+y <- apply(probs2, MARGIN = 1, 
+           FUN = function(x)sample(pain, size = 1, prob = x))
+```
+
+Next we combine our "trt" and "y" variables into a data frame and set up "y" as an ordered factor. Recall we use the `levels` argument to set the ordering.
+
+```{r}
+d <- data.frame(y, trt)
+d$y <- factor(d$y, levels = pain, ordered = TRUE)
+```
+
+Now we can "work backwards" and use `polr()` to see how close we get to recovering the true values we used to generate the data. With a sample size of 300 we do quite well. .
+
+```{r}
+mod <- polr(y ~ trt, data = d, Hess = TRUE)
+summary(mod)
+```
+
 
 ## References
 - Chris Builder and Thomas Loughin (2015). Analysis of Categorical Data with R. CRC Press. URL: http://www.chrisbilder.com/categorical/
