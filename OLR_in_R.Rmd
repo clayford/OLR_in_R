@@ -266,7 +266,7 @@ log odds(None) = 0.7499 - 1.568*1
 (p2 <- (m1$zeta["None|Some"] - m1$coefficients) |> plogis())
 ```
 
-So we predict about 68% of subjects on Placebo will see no improvement versus only about 31% of subjects on Treatment. 
+So we predict about 68% of subjects on Placebo will see no improvement versus only about 32% of subjects on Treatment. 
 
 The log odds of Some or lower given a subject was on Placebo (Treatment = 0):
 
