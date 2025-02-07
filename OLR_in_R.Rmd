@@ -6,7 +6,6 @@ editor_options:
   chunk_output_type: inline
 ---
 
-
 This is an R Markdown Notebook. When you execute code within the notebook, the results appear beneath the code. 
 
 Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter* (Win/Linux) or *Cmd+Shift+Return* (Mac). 
@@ -25,7 +24,6 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 ## CODE ALONG 0
 
 Try the `cumsum()` function with the vector `1:5`
-
 
 
 ## Load Packages
@@ -63,7 +61,7 @@ proportions(resp)
 
 Based on this random sample I might estimate that a randomly selected UVA student has a probability of about 0.31 of liking medium spicy food. I'm using my observed proportion as an estimate of probability.
 
-Another way to summarize the results is with _cumulative probabilities_. For example, what's the the probability a randomly selected student can handle _medium heat or less_? Using the `cumsum()` we can calculate cumulative sums of proportions and answer this question. Below we take the proportions and "pipe" into the `cumsum()` function using the base R pipe operator. 
+Another way to summarize the results is with _cumulative probabilities_. For example, what's the the probability a randomly selected student can handle _medium heat or less_? Using the `cumsum()` we can calculate cumulative sums of proportions and answer this question. Below we take the proportions and "pipe" into the `cumsum()` function using the base R pipe operator. A keyboard shortcut to insert the pipe operator is *Ctrl + Shift + M* (Win/Linux) or *Cmd + Shift + M* (Mac)
 
 ```{r}
 proportions(resp) |> cumsum()
@@ -218,7 +216,31 @@ summary(m1)
 
 The message "Re-fitting to get Hessian" means the model was refit when we called `summary()` to get a matrix called the "Hessian" in order to compute standard errors. To suppress this message, use `Hess = TRUE` in the call to `polr()`.
 
-Notice we have _multiple intercepts_ which are listed separately from the coefficients. The separate intercepts are for _the levels below which we calculate cumulative probabilities_. Recall the levels of Improved:
+First let's interpret the Treatment coefficient: 1.568 
+
+This on the log odds scale. If we exponentiate we get an _odds ratio_.
+
+```{r}
+exp(coef(m1))
+```
+
+This says the estimated odds that a Treated subject's response has _higher improvement_ is about 4.8 times the odds that a Placebo subject's response has higher improvement. Recall the levels of Improved:
+
+None < Some < Marked
+
+There are two breakpoints:
+
+1. None vs Some or Marked
+2. None or Some vs Marked
+
+- Expected odds that Treated subject experiences _Some or Marked_ improvement is 4.8 times the odds that a Placebo subject experiences Some or Marked improvement.
+- Expected odds that Treated subject experiences _Marked_ improvement is 4.8 times the odds that a Placebo subject experiences Marked improvement.
+
+It doesn't matter which comparison we make, the model assumes the same odds ratio. This is the _proportional odds assumption_.
+
+## Understanding the model
+
+Notice we have _two intercepts_. The separate intercepts are for _the levels below which we calculate cumulative probabilities_. Recall the levels of Improved:
 
 None < Some < Marked
 
@@ -229,7 +251,7 @@ There are two cumulative probabilities we can calculate:
 
 (Marked and lower will always be 1.)
 
-So we have two models depending on the cumulative probability we want to model:
+So we have _two models_ depending on the cumulative probability we want to model:
 
 1. log odds(None) = 0.7499 - 1.568*Treatment 
 2. log odds(Some or lower) = 1.5499 - 1.568*Treatment
@@ -248,6 +270,8 @@ m1$zeta
 m1$coefficients
 ```
 
+### Prob(None)
+
 The log odds of None given a subject was on Placebo (Treatment = 0):
 
 log odds(None) = 0.7499 - 1.568*0 = 0.7499
@@ -255,38 +279,44 @@ log odds(None) = 0.7499 - 1.568*0 = 0.7499
 That's simply the `None|Some` intercept: 0.7499107. To convert to probability, we can use the `plogis()` function. Below we pipe the `None|Some` intercept into `plogis()` and save as `p1`.
 
 ```{r}
+# P(None) when Treatment = "Placebo"
 (p1 <- m1$zeta["None|Some"] |> plogis())
 ```
 
 The log odds of None given a subject was on Treatment (Treatment = 1):
 
-log odds(None) = 0.7499 - 1.568*1
+log odds(None) = 0.7499 - 1.568*1 = -0.8181. Again we convert to probability.
 
 ```{r}
+# P(None) when Treatment = "Treated"
 (p2 <- (m1$zeta["None|Some"] - m1$coefficients) |> plogis())
 ```
 
-So we predict about 68% of subjects on Placebo will see no improvement versus only about 32% of subjects on Treatment. 
+So we predict subjects on Placebo will see no improvement with probability 0.68 while subjects on Treatment will see no improvement with probability 0.31. 
+
+### Prob(Some or lower)
 
 The log odds of Some or lower given a subject was on Placebo (Treatment = 0):
 
-log odds(Some or lower) = 1.5499 - 1.568*Treatment
+log odds(Some or lower) = 1.5498756 - 1.567644*0 = 1.5498756
 
-That's simply the `Some|Marked` intercept: 1.5498756. 
+That's simply the `Some|Marked` intercept: 1.5498756. Use `plogis()` to convert to probability
 
 ```{r}
+# P(Some or lower) when Treatment = "Placebo"
 (p3 <- m1$zeta["Some|Marked"] |> plogis())
 ```
 
 The log odds of Some or lower given a subject was on Treatment (Treatment = 1):
 
-log odds(Some or lower) = 1.5498756 - 1.567644.
+log odds(Some or lower) = 1.5498756 - 1.567644*1 = -0.0177684. Convert the log odds to probability.
 
 ```{r}
+# P(Some or lower) when Treatment = "Treated"
 (p4 <- (m1$zeta["Some|Marked"] - m1$coefficients) |> plogis())
 ```
 
-This implies about 1 - 0.50 = 50% of Treated subjects can expect Marked improvement versus only 1 - 0.82 = 18% of subjects on Placebo.
+So we predict subjects on Placebo will see None or Some improvement with probability 0.82 while subjects on Treatment will see None or Some improvement with probability 0.50. 
 
 Let's compare the predicted cumulative probabilities to the observed cumulative proportions. 
 
@@ -304,67 +334,97 @@ Now compare to our model-based predicted cumulative probabilities. I'm laying ou
 # Modeled cumulative probabilities
 matrix(c(p1, p2, p3, p4, 1, 1), nrow = 2, 
        dimnames = list("Treatment" = c("Placebo", "Treated"),
-                       "Improved" = c("None", "Marked", "Some")))
+                       "Improved" = c("None", "Some", "Marked")))
 ```
 
 Our model-based predictions are quite close to the observed proportions, but not identical. This is because of the _proportional odds assumption_.
 
 
-## Proportional Odds
+## Understanding proportional Odds
 
 Recall: odds = p/(1 - p)
 
 Predicted probability of Improved = None on Treatment is 0.3062450, which is stored in `p2`. The odds are calculated as 0.3062450/(1 - 0.3062450)
 
 ```{r}
-p2/(1 - p2)
+(odds2 <- p2/(1 - p2))
 ```
 
 Predicted probability of Improved = None on Placebo is 0.6791592, which is stored in `p1`. The odds are calculated as 0.6791592/(1 - 0.6791592)
 
 ```{r}
-p1/(1 - p1)
+(odds1 <- p1/(1 - p1))
 ```
 
 The odds ratio for those two odds are
 
 ```{r}
-(p2/(1 - p2))/
-(p1/(1 - p1))
+odds2/odds1
 ```
 
-If we take the log of that we get the model coefficient for Treatment with a change in sign. (We explain why that is shortly.)
+Notice if we do the same calculations with p3 and p4 we get the same result.
+
+Predicted probability of Improved = Some or None on Treatment is 0.495558, which is stored in `p4`. The odds are calculated as 0.495558/(1 - 0.495558)
 
 ```{r}
-# compare to coef(m1)
-log((p2/(1 - p2))/
-(p1/(1 - p1)))
+(odds4 <- p4/(1 - p4))
 ```
 
-Now let's do the same calculation for the Some or lower cumulative probabilities:
+Predicted probability of Improved = Some or None on Placebo is 0.8248958 , which is stored in `p3`. The odds are calculated as 0.8248958 /(1 - 0.8248958 )
 
 ```{r}
-# p4 = P(Some or lower) if Treated
-# p3 = P(Some or lower) if Placebo
-log((p4/(1 - p4))/
-(p3/(1 - p3)))
+(odds3 <- p3/(1 - p3))
 ```
 
-Notice we get the _same answer_. That's because according to our model, the Treatment effect is proportional to the ordered category levels. That's the proportional odds assumption. _The coefficients are independent of the levels of the ordered response_. It doesn't matter whether we go from "None" to "Some", or "Some" to "Marked", the effect of Treatment is the same.
+The odds ratio for those two odds are
 
-Let's look at the coefficient from the model again.
+```{r}
+odds4/odds3
+```
+
+The _ratio between treatment odds and placebo odds are the same_ for both P(None) and P(Some or None). That's the definition of a proportional relationship. In other words, we have _proportional odds_.
+
+```{r}
+matrix(data = c(odds2, odds1, odds4, odds3), ncol = 2,
+       dimnames = list("Treatment" = c("Treated", "Placebo"),
+                       "Odds" = c("None", "Some or lower")))
+```
+
+The odds are proportional since their ratios are the same:
+
+```{r}
+c(0.441431/2.116811, 0.9823884/4.7108843)
+```
+
+Notice the interpretation is _reversed_ from what we did above! The estimated odds that a Treated subject's response has _lower_ improvement is 0.21 times (or 79% lower) lower than the odds that a Placebo subject's response has lower improvement. (1 - 0.21 = 0.79)
+
+Why is this odds ratio (0.2085359) different from `coef(m1)` (1.567644)?
 
 ```{r}
 coef(m1)
 ```
 
-This is identical to what we derived above, but with a change in sign. `polr()` multiplies the coefficients in the summary output by -1 so when you exponentiate and take the odds ratio, _higher levels of predictors correspond to the response falling in the higher end of the ordinal scale_.  
+If we take the _log_ of the odds ratios we get the log odds model coefficient for Treatment with a _change in sign_. 
+
+```{r}
+c(log(odds2/odds1), log(odds4/odds3))
+```
+
+This is identical to `coef(m1)`, but with a change in sign. `polr()` multiplies the coefficients in the summary output by -1 so when you exponentiate to get the odds ratio, _higher levels of predictors correspond to the response falling in the higher end of the ordinal scale_. 
+
+None < Some < Marked
+
+- Instead of estimating odds of None, we estimate odds of Some or Marked.
+- Instead of estimating odds of None or Some, we estimate odds of Marked.
 
 ```{r}
 exp(coef(m1))
 ```
 
-Interpretation: the estimated odds that a Treated subject's response has higher improvement is about 4.8 times the odds that a Placebo subject's response has higher improvement
+Interpretation: 
+
+- Expected odds that Treated subject experiences _Some or Marked_ improvement is 4.8 times the odds that a Placebo subject experiences Some or Marked improvement.
+- Expected odds that Treated subject experiences _Marked_ improvement is 4.8 times the odds that a Placebo subject experiences Marked improvement.
 
 Notice if we "undo" the multiplication by -1 we get the odds ratio we calculated above.
 
@@ -372,35 +432,25 @@ Notice if we "undo" the multiplication by -1 we get the odds ratio we calculated
 exp(-coef(m1))  # -coef(m1) is equivalent to -1*coef(m1)
 ```
 
-Compare to:
+The substance of the result remains the same, but the interpretation is reversed: 
+- Expected odds that Treated subject experiences _No_ improvement is 0.21 times (or 79% less) the odds that a Placebo subject experiences No improvement.
+- Expected odds that Treated subject experiences _None or Some_ improvement is 0.21 times (or 79% less) the odds that a Placebo subject experiences None or Some improvement.
 
-```{r}
-(p2/(1 - p2))/
-(p1/(1 - p1))
-```
-
-And to:
-
-```{r}
-(p4/(1 - p4))/
-(p3/(1 - p3))
-```
-
-The substance of the result remains the same, but the interpretation is reversed: The estimated odds that a Treated subject's response has lower improvement is about 80% less than the odds that a Placebo subject's response has lower improvement
+In most cases, _we prefer the former interpretation_. We want to understand how variables affect the probability of moving to higher categories. (i.e., going from None to Some/Marked, or None/Some to Marked)
 
 ## Assessing the proportional odds assumption
 
 Earlier we mentioned that proportional odds logistic regression assumes _the coefficients are independent of the category levels_. This means we assume the estimated odds ratio of Treatment, 4.795, is the same whether we're talking about comparing None versus Some or higher, or None or Some versus Marked on the Improvement scale.
 
-One way to assess if this assumption is satisfied is the `poTest()` function in the car package. Simply call it on the fitted model. _The null is the proportional odds assumption is true_. Rejecting the null is evidence against the assumption. The `poTest()` function provides an overall test of the PO assumption as well as separate tests for each predictor. We only have one predictor so both tests are the same. The result below implies we're safe in our assumption of proportional odds.
+One way to assess if this assumption is satisfied is the `poTest()` function in the {car} package. Simply call it on the fitted model. _The null is the proportional odds assumption is true_. Rejecting the null is evidence against the assumption. The `poTest()` function provides an overall test of the PO assumption as well as separate tests for each predictor. We only have one predictor so both tests are the same. The result below implies we're safe in our assumption of proportional odds.
 
 ```{r}
 poTest(m1)
 ```
 
-The authors of the car package warn, "It's our experience that the proportional-odds assumption is rarely supported by a hypothesis test." (Fox and Weisberg, 2019, p. 322)
+The authors of the car package warn, _"It's our experience that the proportional-odds assumption is rarely supported by a hypothesis test._ (Fox and Weisberg, 2019, p. 322)
 
-A graphical method for assessing the proportional odds assumption is available in the rms package. The function `plot.xmean.ordinaly` plots both...
+A graphical method for assessing the proportional odds assumption is available in the rms package. The function `plot.xmean.ordinaly()` plots both...
 
 - means of predictor by ordered category level (solid line)
 - expected value of predictor given category level assuming PO assumption is true (dashed line)
@@ -416,8 +466,8 @@ According to Frank Harrell, Violation of Proportional Odds is Not Fatal. See htt
 
 If you think proportional odds assumption is badly violated, two options to consider: 
 
-- The _partial proportional odds model_, which allows some predictors to have multiple coefficients that vary with the response level. This can be fit using the `vglm()` function in the VGAM package. 
-- The _multinomial logit model_ that assumes no ordering of categories and fits a different coefficient for each response level. This can be fit using the `multinom()` function in the nnet package. 
+- The _partial proportional odds model_, which allows some predictors to have multiple coefficients that vary with the response level. This can be fit using the `vglm()` function in the {VGAM} package. 
+- The _multinomial logit model_ that assumes no ordering of categories and fits a different coefficient for each response level. This can be fit using the `multinom()` function in the {nnet} package. 
 
 
 ## Summary output and confidence intervals
@@ -434,7 +484,7 @@ summary(m1)
 - The t values are the ratios of values to standard errors. t values larger than 2 or 3 are good evidence that the sign on the coefficient is correct. In the output above, the t value of 3.53 for the coefficient is strong evidence that the effect of treatment is positive. 
 - Residual Deviance and AIC are model fit statistics used when comparing models. Lower values are better. 
 
-The authors of the `polr()` function elected to not output p-values. P-values do not measure the magnitude of an effect. They simply provide evidence if the sign of a coefficient is reliably positive or negative. A confidence interval on the coefficient is more informative, which we demonstrate next. However if you absolutely need a p-value, you can calculate using the `pt()` function. 
+The authors of the `polr()` function elected to not output p-values. _P-values do not measure the magnitude of an effect_. They simply provide evidence if the sign of a coefficient is reliably positive or negative. A confidence interval on the coefficient is more informative, which we demonstrate next. However if you absolutely need a p-value, you can calculate using the `pt()` function. 
 
 1. Set `q` to t value
 2. Set `df` to number of observations minus number of coefficients estimated
@@ -445,7 +495,11 @@ The authors of the `polr()` function elected to not output p-values. P-values do
 pt(q = 3.53, df = 84 - 3, lower.tail = FALSE) * 2
 ```
 
-The `coeftest()` function in the lmtest package will also return p-values.
+The `coeftest()` function in the {lmtest} package will also return p-values.
+
+```{r}
+lmtest::coeftest(m1)
+```
 
 To understand the _uncertainty of the magnitude of the coefficient_, we can calculate 95% confidence intervals using `confint()`. Notice we use `exp()` to get the odds ratio. Also notice that only a CI for the predictor is calculated, not the intercepts.
 
@@ -473,9 +527,9 @@ predict(m1, newdata = data.frame(Treatment = c("Placebo", "Treated")),
         type = "probs")
 ```
 
-Notice these are NOT cumulative probabilities. These are expected probabilities for each level. They sum to 1. We see that `type = "class"` setting is simply picking the category with the highest probability.
+Notice these are _NOT cumulative probabilities_. These are expected probabilities for each level. They sum to 1. We see that `type = "class"` setting is simply picking the category with the highest probability.
 
-The `predict()` method unfortunately does not provide standard errors and confidence intervals for the predictions. However we can use the emmeans package to calculate. Below we obtain estimated probabilities of each level of Improved conditional on Treatment. The `mode = "prob"` argument ensures predictions are of the probabilities of each class of the ordinal response.
+The `predict()` method unfortunately does not provide standard errors and confidence intervals for the predictions. However we can use the {emmeans} package to calculate these. Below we obtain estimated probabilities of each level of Improved conditional on Treatment. The `mode = "prob"` argument ensures predictions are of the probabilities of each class of the ordinal response.
 
 ```{r}
 emmeans(m1, ~ Improved|Treatment, mode = "prob")
@@ -494,7 +548,7 @@ Which leads us to the next topic.
 
 Between multiple intercepts, log odds, and cumulative probabilities, ordinal logistic regression output can be hard to interpret and communicate. Fortunately we have some methods for visualizing models. 
 
-The effects package provides some good out-of-the-box lattice plots for visualizing ordinal logistic regression models. Use the `Effect` plot to specify which coefficient(s) you want to plot. In our model we only have one choice: Treatment. Then pipe into the `plot()` function. This results in a plot for each outcome. We can see the probability of Marked improvement is much higher for the Treated group than the Placebo group. Likewise the probability of no improvement is much lower in the Treated group than in the Placebo group.
+The {effects} package provides some good out-of-the-box lattice plots for visualizing ordinal logistic regression models. Use the `Effect` plot to specify which coefficient(s) you want to plot. In our model we only have one choice: Treatment. Then pipe into the `plot()` function. This results in a plot for each outcome. We can see the probability of Marked improvement is much higher for the Treated group than the Placebo group. Likewise the probability of no improvement is much lower in the Treated group than in the Placebo group.
 
 ```{r}
 Effect(m1, focal.predictors = "Treatment") |> plot()
@@ -506,26 +560,63 @@ We can combine the lines into one plot as follows:
 Effect(m1, focal.predictors = "Treatment") |> 
   plot(lines=list(multiline=TRUE),
        confint=list(style="bars"))
-
 ```
 
-Another visualization option is the "stacked" plot, though there is no indication of uncertainty. This plot is probably better suited for a numeric predictor.
+
+If you want something created in ggplot2, the ggeffects package provides the `ggeffect()` function and associated plotting method. Set `connect_lines = TRUE` to connect the lines.
 
 ```{r}
-Effect(m1, focal.predictors = "Treatment") |> 
+ggeffect(m1, terms = "Treatment") |> plot(connect_lines = TRUE)
+```
+
+Let's fit a model with a numeric predictor, Age, to see how we can visualize its effects.
+
+```{r}
+m2 <- polr(Improved ~ Treatment + Age, data = Arthritis, Hess = TRUE)
+summary(m2)
+```
+
+The `Effect()` function combined with its `plot()` method show that as age increases, the probability of Marked improvement increases.
+
+```{r}
+Effect(mod = m2, focal.predictors = "Age") |> plot()
+```
+
+Another visualization option for numeric predictors is the "stacked" plot, though there is no indication of uncertainty. The height of each region corresponds to expected probability. The probability of "Some" improvement is about the same throughout the age range. The probability of "Marked" improvement increases as age increase. 
+
+```{r}
+Effect(m2, focal.predictors = "Age") |> 
   plot(axes=list(y=list(style="stacked")))
 ```
 
-If you want something created in ggplot2, the ggeffects package provides the `ggeffect()` function and associated plotting method. I think the `connect.lines = TRUE` argument is good to use.
+Again, a {ggplot2} version is available with the `ggeffects()` function.
 
 ```{r}
-ggeffect(m1, terms = "Treatment") |> plot(connect.lines = TRUE)
+ggeffect(m2, terms = "Age") |> plot()
 ```
+
+If we want, we can save the output of `ggeffects()` and create our own plot. For example, we may want to combine the three plots above into one. Notice we need to set the "response.level" column as an ordered factor.
+
+```{r}
+eDF <- ggeffect(m2, terms = "Age")
+eDF$response.level <- factor(eDF$response.level, 
+                             levels = c("None", "Some", "Marked"), 
+                             ordered = TRUE)
+ggplot(eDF) +
+  aes(x = x, y = predicted, fill = response.level, color = response.level) +
+  geom_line() +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +
+  theme_classic() +
+  labs(fill = "Improvement", color = "Improvement", 
+       x = "Age", y = "Probability")
+
+```
+
 
 
 ## CODE ALONG 2
 
-Now that we've laid out the basics of fitting, assessing and using an Ordinal Logistic Regression model, let's work through a more sophisticated example with additional predictors.
+Now that we've laid out the basics of fitting, assessing and using an Ordinal Logistic Regression model, let's work through a slightly more sophisticated example with three predictors.
 
 - Fit an ordinal regression model with Treatment, Sex, and Age. Call it `m2`. Include `Hess = TRUE` in `polr()`
 - Assess proportional odds assumption
@@ -542,8 +633,18 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 
 Thanks for coming! For free statistical consulting and training, contact us: `statlab@virginia.edu`
 
+## References
+- Chris Builder and Thomas Loughin (2015). Analysis of Categorical Data with R. CRC Press. URL: http://www.chrisbilder.com/categorical/
+- John Fox and Sanford Weisberg (2019). An R Companion to Applied Regression, Third Edition. Thousand Oaks CA: Sage. URL: https://socialsciences.mcmaster.ca/jfox/Books/Companion/
+- Michael Friendly and David Meyer (2016). Discrete Data Analysis with R. CRC Press. URL: http://ddar.datavis.ca/
+- Frank Harrell (2015). Regression Modeling Strategies, 2nd edition. Springer.
+- Lüdecke D (2018). “ggeffects: Tidy Data Frames of Marginal Effects from Regression Models.” _Journal of Open Source Software_, *3*(26), 772. doi:10.21105/joss.00772 <https://doi.org/10.21105/joss.00772>.
+- David Meyer, Achim Zeileis, and Kurt Hornik (2022). vcd: Visualizing Categorical Data. R package version 1.4-10.
+- G. Koch & S. Edwards (1988), Clinical efficiency trials with categorical data. In K. E. Peace (ed.), Biopharmaceutical Statistics for Drug Development, 403–451. Marcel Dekker, New York.
+- Venables, W. N. & Ripley, B. D. (2002) Modern Applied Statistics with S. Fourth Edition. Springer, New York. ISBN 0-387-95457-0
+- H. Wickham. ggplot2: Elegant Graphics for Data Analysis. Springer-Verlag New York, 2016.
 
-## Cut for time
+## Appendix
 
 ## Assessing predictive accuracy 
 
@@ -570,7 +671,7 @@ Now we can validate this model using the `validate` function. We set `B=200` to 
 
 We expect to see `index.corrected` values _smaller_ than the `index.orig` values, since the original values have been calculated using the same data to fit the model.
 
-For example, the first row is Spearman's rho, a measure of correlation. It takes values between -1 and 1. When rho=1, the predictions are perfectly discriminating. The original estimate was 0.5044. Bootstrap validation lowers it to about 0.4633 (at least when I ran it; bootstrapping is based on random resampling so you'll likely see a slightly different corrected value.) Likewise, the second value is R2, which measures the percentage of variation in outcome values explained by the model. We hope to see something close to 1. Originally it was 0.2911, but the bootstrap validation lowers it to about 0.2269. pdm is the mean absolute difference between 0.5 (ie, random guessing) and the predicted probability that the ordinal response is greater than or equal to the marginal median of the ordinal response. In other words, a higher value indicates that the model is discriminating between the ordered levels. Originally ii was 0.2083, but is lowered to 0.1803 after validation.
+For example, the first row is Spearman's rho, a measure of correlation. It takes values between -1 and 1. When rho=1, the predictions are perfectly discriminating. The original estimate was 0.5044. Bootstrap validation lowers it to about 0.4633 (at least when I ran it; bootstrapping is based on random resampling so you'll likely see a slightly different corrected value.) Likewise, the second value is R2, which measures the percentage of variation in outcome values explained by the model. We hope to see something close to 1. Originally it was 0.2911, but the bootstrap validation lowers it to about 0.2269. pdm is the mean absolute difference between 0.5 (ie, random guessing) and the predicted probability that the ordinal response is greater than or equal to the marginal median of the ordinal response. In other words, a higher value indicates that the model is discriminating between the ordered levels. Originally it was 0.2083, but is lowered to 0.1803 after validation.
 
 ```{r}
 v <- validate(m_rms, B = 200)
@@ -597,7 +698,7 @@ Here's a glimpse of the first 5 simulations:
 sims[1:5,1:5]
 ```
 
-Let's calculate the proportion of each response within each simulation using `xtabs()` and `proportions()`. The last function, `as.data.frame()` converts the table to a data frame and names the column containing the proportions "P" (the default is "Freq").
+Let's calculate the proportion of each response within the first simulation using `xtabs()` and `proportions()`. The last function, `as.data.frame()` converts the table to a data frame and names the column containing the proportions "P" (the default is "Freq").
 
 ```{r}
 xtabs(~ sims$sim_1) |>
@@ -738,7 +839,7 @@ d <- data.frame(y, trt)
 d$y <- factor(d$y, levels = pain, ordered = TRUE)
 ```
 
-Now we can "work backwards" and use `polr()` to see how close we get to recovering the true values we used to generate the data. With a sample size of 300 we do quite well. .
+Now we can "work backwards" and use `polr()` to see how close we get to recovering the true values we used to generate the data. With a sample size of 300 we do quite well.
 
 ```{r}
 mod <- polr(y ~ trt, data = d, Hess = TRUE)
@@ -746,13 +847,3 @@ summary(mod)
 ```
 
 
-## References
-- Chris Builder and Thomas Loughin (2015). Analysis of Categorical Data with R. CRC Press. URL: http://www.chrisbilder.com/categorical/
-- John Fox and Sanford Weisberg (2019). An R Companion to Applied Regression, Third Edition. Thousand Oaks CA: Sage. URL: https://socialsciences.mcmaster.ca/jfox/Books/Companion/
-- Michael Friendly and David Meyer (2016). Discrete Data Analysis with R. CRC Press. URL: http://ddar.datavis.ca/
-- Frank Harrell (2015). Regression Modeling Strategies, 2nd edition. Springer.
-- Lüdecke D (2018). “ggeffects: Tidy Data Frames of Marginal Effects from Regression Models.” _Journal of Open Source Software_, *3*(26), 772. doi:10.21105/joss.00772 <https://doi.org/10.21105/joss.00772>.
-- David Meyer, Achim Zeileis, and Kurt Hornik (2022). vcd: Visualizing Categorical Data. R package version 1.4-10.
-- G. Koch & S. Edwards (1988), Clinical efficiency trials with categorical data. In K. E. Peace (ed.), Biopharmaceutical Statistics for Drug Development, 403–451. Marcel Dekker, New York.
-- Venables, W. N. & Ripley, B. D. (2002) Modern Applied Statistics with S. Fourth Edition. Springer, New York. ISBN 0-387-95457-0
-- H. Wickham. ggplot2: Elegant Graphics for Data Analysis. Springer-Verlag New York, 2016.
