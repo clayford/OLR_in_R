@@ -195,8 +195,8 @@ About 84% of subjects experienced None or Some improvement in the Placebo group 
 
 ## CODE ALONG 1
 
-- Investigate the Age variable
-- Investigate the Sex variable
+- Investigate the Sex variable with respect to Improved
+- Investigate the Age variable with respect to Improved
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).  
 
@@ -224,7 +224,7 @@ This on the log odds scale. If we exponentiate we get an _odds ratio_.
 exp(coef(m1))
 ```
 
-This says the estimated odds that a Treated subject's response has _higher improvement_ is about 4.8 times the odds that a Placebo subject's response has higher improvement. Recall the levels of Improved:
+This says the estimated odds that a Treated subject's response has _higher improvement_ is about 4.8 times higher than the odds that a Placebo subject's response has higher improvement. Recall the levels of Improved:
 
 None < Some < Marked
 
@@ -247,7 +247,7 @@ None < Some < Marked
 There are two cumulative probabilities we can calculate:
 
 1. None
-2. Some and lower
+2. Some or lower
 
 (Marked and lower will always be 1.)
 
@@ -362,7 +362,7 @@ The odds ratio for those two odds are
 odds2/odds1
 ```
 
-Notice if we do the same calculations with p3 and p4 we get the same result.
+Notice if we do the same calculations with p3 and p4 we get the _same result_.
 
 Predicted probability of Improved = Some or None on Treatment is 0.495558, which is stored in `p4`. The odds are calculated as 0.495558/(1 - 0.495558)
 
@@ -382,7 +382,7 @@ The odds ratio for those two odds are
 odds4/odds3
 ```
 
-The _ratio between treatment odds and placebo odds are the same_ for both P(None) and P(Some or None). That's the definition of a proportional relationship. In other words, we have _proportional odds_.
+The _ratio between treatment odds and placebo odds are the same_ for both P(None) and P(Some or lower). That's the definition of a proportional relationship. In other words, we have _proportional odds_.
 
 ```{r}
 matrix(data = c(odds2, odds1, odds4, odds3), ncol = 2,
@@ -398,10 +398,10 @@ c(0.441431/2.116811, 0.9823884/4.7108843)
 
 Notice the interpretation is _reversed_ from what we did above! The estimated odds that a Treated subject's response has _lower_ improvement is 0.21 times (or 79% lower) lower than the odds that a Placebo subject's response has lower improvement. (1 - 0.21 = 0.79)
 
-Why is this odds ratio (0.2085359) different from `coef(m1)` (1.567644)?
+Why is this odds ratio (0.2085359) different from `exp(coef(m1))` (4.795338)?
 
 ```{r}
-coef(m1)
+exp(coef(m1))
 ```
 
 If we take the _log_ of the odds ratios we get the log odds model coefficient for Treatment with a _change in sign_. 
@@ -410,7 +410,13 @@ If we take the _log_ of the odds ratios we get the log odds model coefficient fo
 c(log(odds2/odds1), log(odds4/odds3))
 ```
 
-This is identical to `coef(m1)`, but with a change in sign. `polr()` multiplies the coefficients in the summary output by -1 so when you exponentiate to get the odds ratio, _higher levels of predictors correspond to the response falling in the higher end of the ordinal scale_. 
+This is identical to `coef(m1)`, but with a change in sign. 
+
+```{r}
+coef(m1)
+```
+
+`polr()` multiplies the coefficients in the summary output by -1 so when you exponentiate to get the odds ratio, _higher levels of predictors correspond to the response falling in the higher end of the ordinal scale_. 
 
 None < Some < Marked
 
@@ -438,9 +444,17 @@ The substance of the result remains the same, but the interpretation is reversed
 
 In most cases, _we prefer the former interpretation_. We want to understand how variables affect the probability of moving to higher categories. (i.e., going from None to Some/Marked, or None/Some to Marked)
 
+## CODE ALONG 2
+
+Model Improved as a function of Treatment and Sex and save the model object as `m2`. In other words, we want to understand the association between Treatment and Improved adjusted for Sex. Interpret the coefficient on Treatment. 
+
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).  
+
+
+
 ## Assessing the proportional odds assumption
 
-Earlier we mentioned that proportional odds logistic regression assumes _the coefficients are independent of the category levels_. This means we assume the estimated odds ratio of Treatment, 4.795, is the same whether we're talking about comparing None versus Some or higher, or None or Some versus Marked on the Improvement scale.
+Proportional odds logistic regression assumes _the coefficients are independent of the category levels_. This means we assume the estimated odds ratio of Treatment, 4.795, is the same whether we're talking about comparing Some or higher versus Non, or Marked versus None or Some on the Improvement scale.
 
 One way to assess if this assumption is satisfied is the `poTest()` function in the {car} package. Simply call it on the fitted model. _The null is the proportional odds assumption is true_. Rejecting the null is evidence against the assumption. The `poTest()` function provides an overall test of the PO assumption as well as separate tests for each predictor. We only have one predictor so both tests are the same. The result below implies we're safe in our assumption of proportional odds.
 
@@ -468,6 +482,12 @@ If you think proportional odds assumption is badly violated, two options to cons
 
 - The _partial proportional odds model_, which allows some predictors to have multiple coefficients that vary with the response level. This can be fit using the `vglm()` function in the {VGAM} package. 
 - The _multinomial logit model_ that assumes no ordering of categories and fits a different coefficient for each response level. This can be fit using the `multinom()` function in the {nnet} package. 
+
+## CODE ALONG 3 
+
+Assess the proportional odds assumption of model `m2` from the previous CODE ALONG.
+
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).  
 
 
 ## Summary output and confidence intervals
@@ -509,6 +529,14 @@ exp(confint(m1))
 
 The estimated odds that a Treated subject's response has higher improvement is at least 2 times the odds that a Placebo subject's response has higher improvement, perhaps as high as 11 times.
 
+## CODE ALONG 4
+
+Calculate a 95% confidence interval for the Treatment coefficient of model `m2` and interpret.
+
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).  
+
+
+
 ## Using predict() with fitted models
 
 Earlier we made predictions "by hand" (for teaching purposes) with intercept and coefficient values. In practice we would likely use `predict()` to get fitted probabilities. Using the `newdata` argument we can specify what we want to make predictions for. The default is to predict the class, or level, for the given predictors. (`type = "class"`)
@@ -542,7 +570,14 @@ emmeans(m1, ~ Improved|Treatment, mode = "prob") |>
   plot()
 ```
 
-Which leads us to the next topic.
+
+## CODE ALONG 5
+
+Use {emmeans} to calculate estimated probabilities for each level of Improved _adjusted for Sex_ using model object `m2`.
+
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).  
+
+
 
 ## Visualizing the model
 
@@ -572,33 +607,33 @@ ggeffect(m1, terms = "Treatment") |> plot(connect_lines = TRUE)
 Let's fit a model with a numeric predictor, Age, to see how we can visualize its effects.
 
 ```{r}
-m2 <- polr(Improved ~ Treatment + Age, data = Arthritis, Hess = TRUE)
-summary(m2)
+m3 <- polr(Improved ~ Treatment + Age, data = Arthritis, Hess = TRUE)
+summary(m3)
 ```
 
 The `Effect()` function combined with its `plot()` method show that as age increases, the probability of Marked improvement increases.
 
 ```{r}
-Effect(mod = m2, focal.predictors = "Age") |> plot()
+Effect(mod = m3, focal.predictors = "Age") |> plot()
 ```
 
 Another visualization option for numeric predictors is the "stacked" plot, though there is no indication of uncertainty. The height of each region corresponds to expected probability. The probability of "Some" improvement is about the same throughout the age range. The probability of "Marked" improvement increases as age increase. 
 
 ```{r}
-Effect(m2, focal.predictors = "Age") |> 
+Effect(m3, focal.predictors = "Age") |> 
   plot(axes=list(y=list(style="stacked")))
 ```
 
 Again, a {ggplot2} version is available with the `ggeffects()` function.
 
 ```{r}
-ggeffect(m2, terms = "Age") |> plot()
+ggeffect(m3, terms = "Age") |> plot()
 ```
 
 If we want, we can save the output of `ggeffects()` and create our own plot. For example, we may want to combine the three plots above into one. Notice we need to set the "response.level" column as an ordered factor.
 
 ```{r}
-eDF <- ggeffect(m2, terms = "Age")
+eDF <- ggeffect(m3, terms = "Age")
 eDF$response.level <- factor(eDF$response.level, 
                              levels = c("None", "Some", "Marked"), 
                              ordered = TRUE)
@@ -612,21 +647,18 @@ ggplot(eDF) +
 
 ```
 
+## CODE ALONG 6
 
+Let's work through a slightly more sophisticated example with three predictors.
 
-## CODE ALONG 2
-
-Now that we've laid out the basics of fitting, assessing and using an Ordinal Logistic Regression model, let's work through a slightly more sophisticated example with three predictors.
-
-- Fit an ordinal regression model with Treatment, Sex, and Age. Call it `m2`. Include `Hess = TRUE` in `polr()`
+- Fit an ordinal regression model with Treatment, Sex, and Age. Call it `m4`. Include `Hess = TRUE` in `polr()`
 - Assess proportional odds assumption
 - Interpret the coefficients
 - Visualize the model
-- Is the model "better" than `m1`? Use `anova(m1, m2)` to test.
+- Is this model "better" than `m2`? Use `anova(m2, m4)` to test.
 
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).  
-
 
 
 ## We're done!

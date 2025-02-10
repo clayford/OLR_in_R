@@ -1,17 +1,55 @@
+Ordinal Logistic Regression in R
+Code along answers
+
 ## CODE ALONG 1
 
 - Investigate the Age variable
 - Investigate the Sex variable
 
+xtabs(~ Sex + Improved, data = Arthritis) |> 
+  proportions(margin = 1) |> 
+  apply(1, cumsum) |> 
+  t()
 
 summary(Arthritis$Age)
 hist(Arthritis$Age)
+plot(Improved ~ Age, data = Arthritis)
 stripchart(Age ~ Improved, data = Arthritis)
-
-xtabs(~ Sex, data = Arthritis)
 
 
 ## CODE ALONG 2
+
+m2 <- polr(Improved ~ Treatment + Sex, data = Arthritis)
+exp(coef(m2))
+
+The estimated odds that a Treated subject's response has higher improvement is about 6 times higher than the odds that a Placebo subject's response has higher improvement. 
+
+
+## CODE ALONG 3 
+
+Assess the proportional odds assumption of model `m2` from the previous CODE ALONG.
+
+poTest(m2)
+rms::plot.xmean.ordinaly(Improved ~ Sex, data = Arthritis)
+
+
+## CODE ALONG 4
+
+Calculate a 95% confidence interval for the Treatment coefficient of model `m2` and interpret.
+
+exp(confint(m2))
+
+The estimated odds that a Treated subject's response has higher improvement is at least 2.5 times the odds that a Placebo subject's response has higher improvement, perhaps as high as 15 times, adjusted for Sex.
+
+
+## CODE ALONG 5
+
+emmeans(m2, ~ Improved|Treatment, mode = "prob")
+emmeans(m2, ~ Improved|Treatment, mode = "prob") |> plot()
+
+
+## CODE ALONG 6
+
 
 - Fit an ordinal regression model with Treatment, Sex, and Age. Call it `m2`. Include `Hess = TRUE` in `polr()`
 
@@ -39,14 +77,18 @@ ggeffect(m2, terms = "Treatment") |> plot(connect_lines = TRUE)
 ggeffect(m2, terms = "Sex") |> plot(connect_lines = TRUE)
 
 
-- Is the model with three predictors an improvement over the model with 1 predictor?
+- Is the model with three predictors (m4) an improvement over the model with 2 predictors (m2)?
 
-anova(m1, m2)
-AIC(m1, m2)
+anova(m2, m4)
+AIC(m2, m4)
 
-- assessment model via simulation
+- assess model via simulation
 
-sims2 <- simulate(m2, nsim = 200)
+sims2 <- simulate(m4, nsim = 200)
+obs_pdf <- xtabs(~ Improved, data = Arthritis) |> 
+  proportions() |>
+  as.data.frame(responseName = "P")
+obs_pdf
 p_df <- function(x){
   xtabs(~ x) |> 
   proportions() |>
@@ -61,5 +103,4 @@ ggplot() +
   geom_point(mapping = aes(x = Improved, y = P), 
              data = obs_pdf, size = 4, color = "blue") 
 
-```
 
