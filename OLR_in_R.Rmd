@@ -67,7 +67,7 @@ Another way to summarize the results is with _cumulative probabilities_. For exa
 proportions(resp) |> cumsum()
 ```
 
-Based on this calculation I might estimate that a randomly selected student has a probability of about 0.71 of liking _medium or lower_ spiciness. We might state this mathematically as follows (using LaTeX):
+Based on this calculation I might estimate that a randomly selected student has a probability of about 0.71 of liking _medium or lower_ spiciness. We can state this mathematically as follows (using LaTeX):
 
 $$P[X \le \text{medium}] = 0.71 $$
 
@@ -75,7 +75,7 @@ In this case we're using the _ordering of the responses_ to make additional infe
 
 What if we also collected additional information such as the sex of the respondents? Does being male or female affect the _cumulative probability_ of 0.71? 
 
-What about age or weight? Does being older and heavier affect the _cumulative probability_ of spiciness preference?
+What about age or weight or ethnicity? Do these affect the _cumulative probability_ of spiciness preference?
 
 _Ordinal Logistic Regression_ is a method that allows us to investigate questions such as this. It allows us to _model the cumulative probability_ of an ordered category given multiple predictors.
 
@@ -100,7 +100,7 @@ URL <- "https://github.com/clayford/OLR_in_R/raw/main/data/arthritis.rds"
 Arthritis <- readRDS(file = url(URL))
 ```
 
-### List of variables
+## List of variables
 
 ```{r}
 names(Arthritis)
@@ -112,7 +112,7 @@ names(Arthritis)
 - Age: age of patient in years
 - Improved: _ordered factor_ indicating treatment outcome (None, Some, Marked).
 
-The goal today is to teach the basics of Ordinal Logistic Regression by developing a model to predict the _cumulative probability_ of pain improvement after treatment adjusting for age and sex. 
+The goal today is to learn the basics of Ordinal Logistic Regression by developing a model to predict the _cumulative probability_ of pain improvement after treatment adjusting for age and sex. 
 
 
 ## Ordered Factors in R
@@ -169,7 +169,7 @@ head(Arthritis$Improved)
 Let's tabulate the counts using `xtabs()`. The notation `~ Improved` means "tabulate by Improved".
 
 ```{r}
-xtabs(~ Improved, data = Arthritis)
+xtabs(~ Improved, data = Arthritis, addNA = TRUE)
 ```
 
 We an get cumulative proportions using `proportions()` and `cumsum()`. 
@@ -207,7 +207,7 @@ Ordinal logistic regression produces a _model_ that we can use to make cumulativ
 
 Let's fit a simple model for the Arthritis data. Below we model Improved as a function of Treatment. In other words, _how does Treatment affect the cumulative probability of Improved_?
 
-One way to do this is with the `polr()` function from the MASS package. "polr" stands for "proportional odds logistic regression". We'll explain proportional odds in a moment. As with `lm()` and `glm()`, we define our model using R's formula syntax. We also typically want to save the model result and inspect the results using `summary()`
+One way to do this is with the `polr()` function from the {MASS} package. "polr" stands for "proportional odds logistic regression". We'll explain proportional odds in a moment. As with `lm()` and `glm()`, we define our model using R's formula syntax. We also typically want to save the model result and inspect the results using `summary()`
 
 ```{r}
 m1 <- polr(Improved ~ Treatment, data = Arthritis)
@@ -218,7 +218,11 @@ The message "Re-fitting to get Hessian" means the model was refit when we called
 
 First let's interpret the Treatment coefficient: 1.568 
 
-This on the log odds scale. If we exponentiate we get an _odds ratio_.
+This on the _log odds_, or _logit_, scale. This says being in the Treated group increases the log odds of improvement by 1.568.
+
+Reminder: log odds is probability [0,1] rescaled to range from (-Inf,Inf).
+
+If we exponentiate the coefficient we get an _odds ratio_.
 
 ```{r}
 exp(coef(m1))
@@ -240,6 +244,17 @@ It doesn't matter which comparison we make, the model assumes the same odds rati
 
 ## Understanding the model
 
+```
+Coefficients:
+                 Value Std. Error t value
+TreatmentTreated 1.568     0.4441    3.53
+
+Intercepts:
+            Value  Std. Error t value
+None|Some   0.7499 0.3210     2.3363 
+Some|Marked 1.5499 0.3559     4.3553 
+```
+
 Notice we have _two intercepts_. The separate intercepts are for _the levels below which we calculate cumulative probabilities_. Recall the levels of Improved:
 
 None < Some < Marked
@@ -260,7 +275,7 @@ Where Treatment = 1 if treated, 0 if on Placebo.
 
 Notice _the coefficient is subtracted from the intercept_. That's the model that `polr()` fits. Also notice the _model is on the log odds, or logit, scale_. Recall that log odds is probability rescaled from [0,1] to (-Inf, + Inf). So the model predicts log odds values, which we then transform back to probability using the inverse logit.
 
-Now let's use our model and compute cumulative probabilities "by hand". Before we do that, it's good to know how to extract the intercepts and coefficients from the model object. The model object is a list. We use the `$` operator to extract elements from it. The intercepts are in the `zeta` element and the coefficients are in the `coefficients` element. (Can also use `coef()` to extract coefficients.)
+Now let's use our model and compute cumulative probabilities "by hand". Before we do that, we need to know how to extract the intercepts and coefficients from the model object. The model object is a list. We use the `$` operator to extract elements from it. The intercepts are in the `zeta` element and the coefficients are in the `coefficients` element. (Can also use `coef()` to extract coefficients.)
 
 ```{r}
 m1$zeta
@@ -276,7 +291,7 @@ The log odds of None given a subject was on Placebo (Treatment = 0):
 
 log odds(None) = 0.7499 - 1.568*0 = 0.7499
 
-That's simply the `None|Some` intercept: 0.7499107. To convert to probability, we can use the `plogis()` function. Below we pipe the `None|Some` intercept into `plogis()` and save as `p1`.
+That's simply the `None|Some` intercept: 0.7499107. To convert to probability, we can use the `plogis()` function, which calculates the inverse logit. Below we pipe the `None|Some` intercept into `plogis()` and save as `p1`.
 
 ```{r}
 # P(None) when Treatment = "Placebo"
@@ -416,7 +431,7 @@ This is identical to `coef(m1)`, but with a change in sign.
 coef(m1)
 ```
 
-`polr()` multiplies the coefficients in the summary output by -1 so when you exponentiate to get the odds ratio, _higher levels of predictors correspond to the response falling in the higher end of the ordinal scale_. 
+`polr()` multiplies the coefficients in the summary output by -1 so when you exponentiate to get the odds ratio _higher levels of predictors correspond to the response falling in the higher end of the ordinal scale_. 
 
 None < Some < Marked
 
@@ -462,9 +477,9 @@ One way to assess if this assumption is satisfied is the `poTest()` function in 
 poTest(m1)
 ```
 
-The authors of the car package warn, _"It's our experience that the proportional-odds assumption is rarely supported by a hypothesis test._ (Fox and Weisberg, 2019, p. 322)
+The authors of the {car} package warn, _"It's our experience that the proportional-odds assumption is rarely supported by a hypothesis test._ (Fox and Weisberg, 2019, p. 322)
 
-A graphical method for assessing the proportional odds assumption is available in the rms package. The function `plot.xmean.ordinaly()` plots both...
+A graphical method for assessing the proportional odds assumption is available in the {rms} package. The function `plot.xmean.ordinaly()` plots both...
 
 - means of predictor by ordered category level (solid line)
 - expected value of predictor given category level assuming PO assumption is true (dashed line)
@@ -598,24 +613,55 @@ Effect(m1, focal.predictors = "Treatment") |>
 ```
 
 
-If you want something created in ggplot2, the ggeffects package provides the `ggeffect()` function and associated plotting method. Set `connect_lines = TRUE` to connect the lines.
+If you want something created in ggplot2, the {ggeffects} package provides the `ggeffect()` function and associated plotting method. Set `connect_lines = TRUE` to connect the lines.
 
 ```{r}
 ggeffect(m1, terms = "Treatment") |> plot(connect_lines = TRUE)
 ```
 
-Let's fit a model with a numeric predictor, Age, to see how we can visualize its effects.
+Let's fit a model with Age and its interaction to see how we can visualize the effects of a numeric predictor. 
 
 ```{r}
-m3 <- polr(Improved ~ Treatment + Age, data = Arthritis, Hess = TRUE)
+m3 <- polr(Improved ~ Treatment + Age + Treatment:Age, 
+           data = Arthritis, Hess = TRUE)
 summary(m3)
 ```
 
-The `Effect()` function combined with its `plot()` method show that as age increases, the probability of Marked improvement increases.
+The `Effect()` function combined with its `plot()` method show that as age increases, the probability of Marked improvement increases. The little lines on the x-axis are the observed data. We call that a "rug".
 
 ```{r}
 Effect(mod = m3, focal.predictors = "Age") |> plot()
 ```
+
+To create the plot above, the Treatment predictor has to be held at a value. The only values in the data are 0 (Placebo) or 1 (Treated). However the `Effect()` function "averages" over the levels of Treatment. We can save the result of the `Effect()` function and see what values are being used to make the predictions.
+
+```{r}
+e.out <- Effect(mod = m3, focal.predictors = "Age")
+# what's being plotted
+e.out
+```
+
+And what's being plugged into the model to make predictions.
+
+```{r}
+e.out$model.matrix
+```
+
+The value for Treatment is just the proportion Treated.
+
+```{r}
+mean(Arthritis$Treatment == "Treated")
+```
+
+This is a "weighted average" that weights the levels of the factor in proportion to sample size.
+
+If you wanted the plot with Treatment held at 0 or 1, probably easiest to just include Treatment as a focal predictor. In fact, since we fit an interaction, we ought to include Treatment since our model says the effect of Age depends on Treatment and vice versa.
+
+```{r}
+Effect(mod = m3, focal.predictors = c("Age", "Treatment")) |> 
+  plot()
+```
+
 
 Another visualization option for numeric predictors is the "stacked" plot, though there is no indication of uncertainty. The height of each region corresponds to expected probability. The probability of "Some" improvement is about the same throughout the age range. The probability of "Marked" improvement increases as age increase. 
 
@@ -624,28 +670,26 @@ Effect(m3, focal.predictors = "Age") |>
   plot(axes=list(y=list(style="stacked")))
 ```
 
-Again, a {ggplot2} version is available with the `ggeffects()` function.
+Again, we can include Treatment.
+
+```{r}
+Effect(m3, focal.predictors = c("Age", "Treatment")) |> 
+  plot(axes=list(y=list(style="stacked")))
+```
+
+
+As before, a {ggplot2} version is available with the `ggeffects()` function.
 
 ```{r}
 ggeffect(m3, terms = "Age") |> plot()
 ```
 
-If we want, we can save the output of `ggeffects()` and create our own plot. For example, we may want to combine the three plots above into one. Notice we need to set the "response.level" column as an ordered factor.
+Including the interaction.
 
 ```{r}
-eDF <- ggeffect(m3, terms = "Age")
-eDF$response.level <- factor(eDF$response.level, 
-                             levels = c("None", "Some", "Marked"), 
-                             ordered = TRUE)
-ggplot(eDF) +
-  aes(x = x, y = predicted, fill = response.level, color = response.level) +
-  geom_line() +
-  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +
-  theme_classic() +
-  labs(fill = "Improvement", color = "Improvement", 
-       x = "Age", y = "Probability")
-
+ggeffect(m3, terms = c("Age", "Treatment")) |> plot()
 ```
+
 
 ## CODE ALONG 6
 
