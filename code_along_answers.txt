@@ -51,18 +51,18 @@ emmeans(m2, ~ Improved|Treatment, mode = "prob") |> plot()
 ## CODE ALONG 6
 
 
-- Fit an ordinal regression model with Treatment, Sex, and Age. Call it `m2`. Include `Hess = TRUE` in `polr()`
+- Fit an ordinal regression model with Treatment, Sex, and Age. Call it `m4`. Include `Hess = TRUE` in `polr()`
 
-m2 <- polr(Improved ~ Treatment + Sex + Age, 
+m4 <- polr(Improved ~ Treatment + Sex + Age, 
            data = Arthritis, Hess = TRUE)
-summary(m2)
+summary(m4)
 
 - Assess proportional odds assumption
-poTest(m2)
+poTest(m4)
 rms::plot.xmean.ordinaly(Improved ~ Treatment + Sex + Age, data = Arthritis)
 
 - Interpret the coefficients
-exp(confint(m2))
+exp(confint(m4))
 
 Interpretation: 
 
@@ -72,9 +72,9 @@ Interpretation:
 
 - Visualize the model with effect displays.
 
-ggeffect(m2, terms = "Age") |> plot()
-ggeffect(m2, terms = "Treatment") |> plot(connect_lines = TRUE)
-ggeffect(m2, terms = "Sex") |> plot(connect_lines = TRUE)
+ggeffect(m4, terms = "Age") |> plot()
+ggeffect(m4, terms = "Treatment") |> plot(connect_lines = TRUE)
+ggeffect(m4, terms = "Sex") |> plot(connect_lines = TRUE)
 
 
 - Is the model with three predictors (m4) an improvement over the model with 2 predictors (m2)?
